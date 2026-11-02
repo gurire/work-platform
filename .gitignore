@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+cdk.out/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+.claude/settings.local.json
+.mcp.local.json

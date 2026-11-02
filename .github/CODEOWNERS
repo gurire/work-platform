@@ -1,0 +1,7 @@
+# Critical paths need a human review before merge. When a second engineer joins,
+# add them here alongside @gurire and enable "Require review from Code Owners".
+*                         @gurire
+/specs/                   @gurire
+/infra/                   @gurire
+/.github/                 @gurire
+/packages/shared/src/money.ts @gurire

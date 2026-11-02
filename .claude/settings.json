@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(~/.aws/**)",
+      "Read(~/.ssh/**)",
+      "Bash(git push --force)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f)",
+      "Bash(git push -f:*)",
+      "Bash(cdk deploy)",
+      "Bash(cdk deploy:*)",
+      "Bash(npx cdk deploy:*)",
+      "Bash(pnpm cdk deploy:*)",
+      "Bash(cdk destroy:*)",
+      "Bash(npx cdk destroy:*)"
+    ],
+    "ask": [
+      "Edit(specs/**)",
+      "Write(specs/**)",
+      "Edit(**/test/protected/**)",
+      "Write(**/test/protected/**)",
+      "Edit(.github/workflows/**)",
+      "Write(.github/workflows/**)",
+      "Edit(infra/lib/access-stack.ts)"
+    ]
+  },
+  "env": {
+    "DISABLE_FEEDBACK_COMMAND": "1"
+  },
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/scripts/hooks/save-wip.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

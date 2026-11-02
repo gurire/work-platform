@@ -1,0 +1,50 @@
+# Deploys through GitHub's OIDC token: no AWS keys are stored anywhere.
+# Dormant until the repo variables AWS_DEPLOY_ROLE_ARN and AWS_REGION are set
+# (see docs/setup/aws-first-deploy.md).
+#
+# - Every push to main deploys the Dev stage.
+# - Prod deploys only when run by hand from the Actions tab, through the
+#   "production" GitHub environment (add yourself as a required reviewer there).
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Stage to deploy
+        type: choice
+        options: [Dev, Prod]
+        default: Dev
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-${{ github.event.inputs.stage || 'Dev' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: vars.AWS_DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ (github.event.inputs.stage || 'Dev') == 'Prod' && 'production' || 'development' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: cdk deploy
+        working-directory: infra
+        run: pnpm exec cdk deploy "${{ github.event.inputs.stage || 'Dev' }}/*" --require-approval never
