@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.15",
     "@wm/shared": "workspace:*",
     "fastify": "^5.0.0"
   },
