@@ -8,6 +8,9 @@
  * Editing stage rules is `team.config.edit`.
  * Review actions and the reviewer team role come from specs/reviews.md, section 4; setting up
  * review stages is also `team.config.edit`.
+ * Record actions come from specs/records.md, section 4; the target team is the record's home
+ * team. Seeing a record is `item.view` on its home team (records are never visible more
+ * widely than the home team's items). Editing the record type catalogue is `org.config.edit`.
  */
 
 export const PERMISSION_ACTIONS = [
@@ -26,6 +29,9 @@ export const PERMISSION_ACTIONS = [
   'review.open',
   'review.verdict',
   'review.withdraw',
+  'record.create',
+  'record.edit',
+  'record.archive',
   'comment.add',
   'comment.editOwn',
   'comment.deleteAny',
@@ -97,6 +103,7 @@ const AGENT_NEVER: ReadonlySet<PermissionAction> = new Set([
   'item.forceMove',
   'review.verdict',
   'review.withdraw',
+  'record.archive',
   'item.restore',
   'item.purge',
   'comment.deleteAny',
@@ -180,7 +187,11 @@ function decideForUser(
     case 'item.tickStep':
     case 'item.reopen':
     case 'review.open':
+    case 'record.create':
+    case 'record.edit':
       return inTeam ? ALLOW : DENY
+    case 'record.archive':
+      return isTeamAdmin ? ALLOW : DENY
     case 'savedView.manage':
       // A reviewer, like a viewer, may keep views of their own.
       return inTeam || (onTeam && isCreator) ? ALLOW : DENY

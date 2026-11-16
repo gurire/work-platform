@@ -8,6 +8,7 @@ import {
 } from '@wm/shared'
 import type { Api, ApiTeam, ApiUser, Me, Workflow, WorkflowStep } from './api'
 import { buildStageStrip, timeAgo, type HistoryEntry } from './item-model'
+import { RecordCard } from './RecordCard'
 import { ReviewPanel } from './ReviewPanel'
 import type { ItemStore } from './store'
 
@@ -21,6 +22,7 @@ interface Props {
   /** e.g. "Item 3 of 120", or null when the item is not in the current list. */
   positionLabel: string | null
   onBack: () => void
+  onOpenRecord: (id: string) => void
 }
 
 const message = (error: unknown) =>
@@ -35,7 +37,17 @@ function missingOf(workflow: Workflow): string[] {
   ]
 }
 
-export function ItemPage({ api, store, itemKey, me, teams, users, positionLabel, onBack }: Props) {
+export function ItemPage({
+  api,
+  store,
+  itemKey,
+  me,
+  teams,
+  users,
+  positionLabel,
+  onBack,
+  onOpenRecord,
+}: Props) {
   const [id, setId] = useState<string | undefined>(() => store.idForKey(itemKey))
   const [notFound, setNotFound] = useState(false)
   const [workflow, setWorkflow] = useState<Workflow | null>(null)
@@ -451,6 +463,7 @@ export function ItemPage({ api, store, itemKey, me, teams, users, positionLabel,
             <dt>Created</dt>
             <dd>{timeAgo(item.createdAt)}</dd>
           </dl>
+          <RecordCard api={api} store={store} item={item} onOpenRecord={onOpenRecord} />
         </aside>
       </div>
     </main>

@@ -63,14 +63,24 @@ export function timeAgo(iso: string, now: number = Date.now()): string {
   })
 }
 
-export type Route = { readonly page: 'list' } | { readonly page: 'item'; readonly key: string }
+export type Route =
+  | { readonly page: 'list' }
+  | { readonly page: 'item'; readonly key: string }
+  | { readonly page: 'record'; readonly id: string }
 
-/** `#/item/ENG-42` opens an item; anything else is the list. */
+/** `#/item/ENG-42` opens an item, `#/record/<id>` a record; anything else is the list. */
 export function parseRoute(hash: string): Route {
-  const match = /^#\/item\/([A-Za-z0-9_-]{1,64})$/.exec(hash)
-  return match?.[1] ? { page: 'item', key: match[1] } : { page: 'list' }
+  const item = /^#\/item\/([A-Za-z0-9_-]{1,64})$/.exec(hash)
+  if (item?.[1]) return { page: 'item', key: item[1] }
+  const record = /^#\/record\/([A-Za-z0-9_-]{1,80})$/.exec(hash)
+  if (record?.[1]) return { page: 'record', id: record[1] }
+  return { page: 'list' }
 }
 
 export function itemHash(key: string): string {
   return `#/item/${encodeURIComponent(key)}`
+}
+
+export function recordHash(id: string): string {
+  return `#/record/${encodeURIComponent(id)}`
 }

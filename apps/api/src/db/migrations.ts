@@ -199,6 +199,43 @@ const MIGRATIONS: readonly { id: string; sql: string }[] = [
       CREATE INDEX review_verdicts_round ON review_verdicts (round_id, seq);
     `,
   },
+  {
+    // Records (specs/records.md). Expand only: new tables and a nullable link on work items.
+    id: '0005_records',
+    sql: `
+      CREATE TABLE record_types (
+        key         text PRIMARY KEY,
+        name        text NOT NULL,
+        fields      jsonb NOT NULL DEFAULT '[]'::jsonb,
+        created_at  timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE records (
+        seq          bigserial UNIQUE,
+        id           text PRIMARY KEY,
+        type_key     text NOT NULL REFERENCES record_types (key),
+        team_id      text NOT NULL REFERENCES teams (id),
+        title        text NOT NULL,
+        values       jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_by   text REFERENCES users (id),
+        created_at   timestamptz NOT NULL DEFAULT now(),
+        updated_at   timestamptz NOT NULL DEFAULT now(),
+        archived_at  timestamptz
+      );
+      CREATE INDEX records_team ON records (team_id, type_key);
+      -- Append-only (rule 3): who changed which fields, from what, to what.
+      CREATE TABLE record_events (
+        seq        bigserial PRIMARY KEY,
+        record_id  text NOT NULL REFERENCES records (id),
+        actor_id   text REFERENCES users (id),
+        action     text NOT NULL CHECK (action IN ('created', 'edited', 'archived')),
+        changes    jsonb NOT NULL DEFAULT '[]'::jsonb,
+        at         timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX record_events_record ON record_events (record_id, seq);
+      ALTER TABLE work_items ADD COLUMN record_id text REFERENCES records (id);
+      CREATE INDEX work_items_record ON work_items (record_id) WHERE record_id IS NOT NULL;
+    `,
+  },
 ]
 
 export async function migrate(db: Db): Promise<string[]> {

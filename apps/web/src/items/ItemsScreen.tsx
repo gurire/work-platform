@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { allowedDestinations, SAMPLE_PRIORITIES } from '@wm/shared'
 import { createApi, type ApiTeam, type ApiUser, type Me } from './api'
 import { CommandPalette, type Command } from './CommandPalette'
-import { itemHash, parseRoute, type Route } from './item-model'
+import { itemHash, parseRoute, recordHash, type Route } from './item-model'
 import { ItemPage } from './ItemPage'
+import { RecordPage } from './RecordPage'
 import { ItemList, type Density } from './ItemList'
 import { measureInteraction, perfStore } from './perf'
 import { ItemStore, type CategoryFilter, type ItemPatch } from './store'
@@ -150,6 +151,14 @@ export function ItemsScreen() {
     window.history.pushState(null, '', window.location.pathname + window.location.search)
     setRoute({ page: 'list' })
   }, [])
+  const openRecord = useCallback((id: string) => {
+    window.location.hash = recordHash(id)
+  }, [])
+  // A record is usually opened from an item, so going back returns there.
+  const backFromRecord = useCallback(() => {
+    if (window.history.length > 1) window.history.back()
+    else backToList()
+  }, [backToList])
   const stepItem = useCallback(
     (delta: number) => {
       const next = ids[routeIndex + delta]
@@ -280,6 +289,13 @@ export function ItemsScreen() {
         return
       }
       if (mod || event.altKey) return
+      if (route.page === 'record') {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          backFromRecord()
+        }
+        return
+      }
       if (route.page === 'item') {
         const itemActions: Record<string, () => void> = {
           Escape: backToList,
@@ -335,6 +351,7 @@ export function ItemsScreen() {
     stepItem,
     openItem,
     currentId,
+    backFromRecord,
   ])
 
   const onSelect = useCallback((index: number) => setCursor(index), [])
@@ -407,6 +424,17 @@ export function ItemsScreen() {
           users={users}
           positionLabel={routeIndex >= 0 ? `Item ${routeIndex + 1} of ${ids.length}` : null}
           onBack={backToList}
+          onOpenRecord={openRecord}
+        />
+      ) : route.page === 'record' ? (
+        <RecordPage
+          api={api}
+          store={store}
+          recordId={route.id}
+          users={users}
+          teams={teams}
+          onBack={backFromRecord}
+          onOpenItem={openItem}
         />
       ) : (
         <>

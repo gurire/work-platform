@@ -1,4 +1,12 @@
-import type { RoundState, Stage, StageTransition, Verdict, WorkItem } from '@wm/shared'
+import type {
+  RecordType,
+  RecordValue,
+  RoundState,
+  Stage,
+  StageTransition,
+  Verdict,
+  WorkItem,
+} from '@wm/shared'
 import type { HistoryEntry } from './item-model'
 import type { ItemPatch } from './store'
 
@@ -67,6 +75,43 @@ export interface Reviews {
   readonly rounds: readonly ReviewRound[]
 }
 
+export interface RecordSummary {
+  readonly id: string
+  readonly typeKey: string
+  readonly teamId: string
+  readonly title: string
+  readonly values: Readonly<Record<string, RecordValue>>
+  readonly archived: boolean
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+export interface RecordDetail {
+  readonly record: RecordSummary
+  readonly type: RecordType | null
+  readonly canEdit: boolean
+  readonly canArchive: boolean
+  readonly items: readonly {
+    id: string
+    key: string
+    title: string
+    statusId: string
+    teamId: string
+  }[]
+  readonly history: readonly {
+    actorId: string | null
+    action: 'created' | 'edited' | 'archived'
+    changes: readonly { field: string; from: RecordValue; to: RecordValue }[]
+    at: string
+  }[]
+}
+
+export interface ItemRecord {
+  readonly record: RecordSummary | null
+  readonly type: RecordType | null
+  readonly canLink: boolean
+}
+
 export interface Me extends ApiUser {
   readonly orgRole: 'org_admin' | 'member' | 'viewer'
   readonly teams: Readonly<Record<string, 'admin' | 'member'>>
@@ -80,8 +125,19 @@ const REASONS: Record<number, string> = {
 }
 
 /** Turns a refusal into a sentence a person can act on. */
-function explain(status: number, body: { error?: string; missing?: string[] }): string {
+function explain(
+  status: number,
+  body: { error?: string; missing?: string[]; field?: string },
+): string {
   switch (body.error) {
+    case 'invalid_value':
+      return `the value for ${body.field ?? 'a field'} does not fit it`
+    case 'required_missing':
+      return `${body.field ?? 'a required field'} is required`
+    case 'unknown_record':
+      return 'that record is not available'
+    case 'archived':
+      return 'that record is archived'
     case 'self_review':
       return 'nobody can review their own work: not whoever asks for the review, nor the stage owner'
     case 'not_a_reviewer':
@@ -129,7 +185,7 @@ export function createApi(getUser: () => string) {
       throw new Error('the server could not be reached')
     }
     if (!response.ok) {
-      let body: { error?: string; missing?: string[] } = {}
+      let body: { error?: string; missing?: string[]; field?: string } = {}
       try {
         body = (await response.json()) as typeof body
       } catch {
@@ -185,6 +241,27 @@ export function createApi(getUser: () => string) {
       }),
     withdrawReview: (roundId: string) =>
       request<Reviews>(`/reviews/${encodeURIComponent(roundId)}/withdraw`, {
+        method: 'POST',
+        body: '{}',
+      }),
+    itemRecord: (id: string) => request<ItemRecord>(`/items/${encodeURIComponent(id)}/record`),
+    linkRecord: (id: string, recordId: string | null) =>
+      request<{ item: WorkItem | null }>(`/items/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ recordId }),
+      }),
+    findRecords: (q: string) =>
+      request<{ records: RecordSummary[] }>(`/records?q=${encodeURIComponent(q)}`).then(
+        (body) => body.records,
+      ),
+    record: (id: string) => request<RecordDetail>(`/records/${encodeURIComponent(id)}`),
+    updateRecord: (id: string, patch: { title?: string; values?: Record<string, RecordValue> }) =>
+      request<RecordDetail>(`/records/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
+    archiveRecord: (id: string) =>
+      request<RecordDetail>(`/records/${encodeURIComponent(id)}/archive`, {
         method: 'POST',
         body: '{}',
       }),

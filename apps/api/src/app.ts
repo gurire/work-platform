@@ -3,6 +3,7 @@ import { WORK_ITEM_KINDS } from '@wm/shared'
 import type { Db } from './db/db.js'
 import { registerItemRoutes } from './routes/items.js'
 import { registerReviewRoutes } from './routes/reviews.js'
+import { registerRecordRoutes } from './routes/records.js'
 
 export interface AppOptions {
   /** Without a database only the health and meta routes exist. */
@@ -26,6 +27,7 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
   if (options.db) {
     registerItemRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerReviewRoutes(app, { db: options.db, devAuth: options.devAuth === true })
+    registerRecordRoutes(app, { db: options.db, devAuth: options.devAuth === true })
   }
 
   return app

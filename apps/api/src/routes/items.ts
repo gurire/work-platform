@@ -14,6 +14,7 @@ import {
 } from '@wm/shared'
 import type { Db, Queryable } from '../db/db.js'
 import { resolvePrincipal } from '../principal.js'
+import { canLinkRecord } from './records.js'
 
 export interface ItemRow {
   seq: string
@@ -470,6 +471,7 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       fields?: Record<string, string | number | boolean | null>
       reason?: string
       force?: boolean
+      recordId?: string | null
     }
   }>(
     '/items/:id',
@@ -496,6 +498,7 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
             },
             reason: { type: 'string', maxLength: 500 },
             force: { type: 'boolean' },
+            recordId: { type: ['string', 'null'], maxLength: 80 },
           },
         },
       },
@@ -506,11 +509,18 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       const row = await loadVisibleItem(principal, request.params.id)
       if (!row) return reply.code(404).send({ error: 'not_found' })
 
-      const { title, statusId, assigneeId, priority, fields, reason, force } = request.body
+      const { title, statusId, assigneeId, priority, fields, reason, force, recordId } =
+        request.body
       const stageChanged = statusId !== undefined && statusId !== row.status_id
       const fromEnd = row.status_category === 'done' || row.status_category === 'cancelled'
       const needed: PermissionAction[] = []
-      if (title !== undefined || priority !== undefined || fields !== undefined) {
+      // Linking a record is editing the item (specs/records.md, rule 5).
+      if (
+        title !== undefined ||
+        priority !== undefined ||
+        fields !== undefined ||
+        recordId !== undefined
+      ) {
         needed.push('item.edit')
       }
       // Leaving a done or cancelled stage is reopening (specs/workflow.md, rule 8).
@@ -527,6 +537,18 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       const params: unknown[] = []
       const param = (value: unknown): string => `$${params.push(value)}`
       if (title !== undefined) sets.push(`title = ${param(title)}`)
+      if (recordId !== undefined) {
+        // Only a new link is checked; keeping an existing one (even archived) is fine (rule 4).
+        const linked = await db.query<{ record_id: string | null }>(
+          'SELECT record_id FROM work_items WHERE id = $1',
+          [row.id],
+        )
+        const isNewLink = recordId !== null && recordId !== (linked[0]?.record_id ?? null)
+        if (isNewLink && !(await canLinkRecord(db, principal, recordId))) {
+          return reply.code(400).send({ error: 'unknown_record' })
+        }
+        sets.push(`record_id = ${param(recordId)}`)
+      }
       let fieldsSql = 'fields'
       if (fields !== undefined) {
         fieldsSql = `(${fieldsSql} || ${param(JSON.stringify(fields))}::jsonb)`

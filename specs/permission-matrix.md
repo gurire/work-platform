@@ -96,6 +96,9 @@ An agent's delete is always a soft delete, restored only by a person.
 | Review: open a round                             |     Y     |     Team      |         Team         |   N    |    By scope     |
 | Review: give or change a verdict                 |     Y     |     Team      |         Team         |   N    |        N        |
 | Review: withdraw a round                         |     Y     |     Team      |         Own          |   N    |        N        |
+| Record: create in its home team                  |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Record: edit fields                              |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Record: archive                                  |     Y     |     Team      |          N           |   N    |        N        |
 | Work item: delete permanently                    |     Y     |       N       |          N           |   N    |        N        |
 | Comment: add                                     |     Y     |     Team      |         Team         |   N    |    By scope     |
 | Comment: edit or delete own                      |     Y     |     Team      |         Team         |   N    |    By scope     |
@@ -121,6 +124,10 @@ The review rows and the **Reviewer** team role were added on 17 Nov 2026 from `s
 (section 4), which has the full table including the Reviewer and Client guest columns. A
 reviewer may view, comment and give verdicts in their teams, and nothing else. For withdrawing
 a round, "Own" means the person who opened it.
+
+The record rows come from `specs/records.md` (section 4, DRAFT of 17 Nov 2026: the owner has not
+yet answered ADR 0007 questions 3 and 5, and the narrower answer is used). "Team" means the
+record's home team. Seeing a record is the same check as seeing a work item of its home team.
 
 ## 6. Decisions (answered by the owner, 16 Nov 2026)
 
