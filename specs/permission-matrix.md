@@ -8,7 +8,7 @@
 </table>
 
 **Status: DRAFT, decisions recorded, not yet approved.** Claude drafted this and the owner answered
-the ten decisions in section 6 on 16 Nov 2026. It becomes binding when the owner merges it.
+the decisions in section 6 on 16 Nov 2026. It becomes binding when the owner merges it.
 Once merged, this file is human-owned and generates the protected permission tests.
 
 ---
@@ -78,28 +78,31 @@ The same decision applies on each. Each row below becomes a set of protected tes
 Y = allowed. N = not allowed. Own = only on objects they created. Team = only within teams
 they belong to. Open = every team that is not private, plus private teams they belong to.
 Granted = only if an org admin has granted that scope, and never beyond the owner's access.
+An agent's delete is always a soft delete, restored only by a person.
 
-| Object: action                    | Org admin |  Team admin   |        Member        | Viewer | Agent / API key |
-| --------------------------------- | :-------: | :-----------: | :------------------: | :----: | :-------------: |
-| Work item: view                   |     Y     |     Open      |         Open         |  Open  |    By scope     |
-| Work item: create                 |     Y     |     Team      |         Team         |   N    |    By scope     |
-| Work item: edit fields            |     Y     |     Team      |         Team         |   N    |    By scope     |
-| Work item: change status          |     Y     |     Team      |         Team         |   N    |    By scope     |
-| Work item: assign                 |     Y     |     Team      |         Team         |   N    |    By scope     |
-| Work item: move to another team   |     Y     | Team (source) | Member of both teams |   N    |        N        |
-| Work item: delete (soft, 30 days) |     Y     |     Team      |         Own          |   N    |     Granted     |
-| Work item: restore within 30 days |     Y     |     Team      |         Own          |   N    |        N        |
-| Work item: delete permanently     |     Y     |       N       |          N           |   N    |        N        |
-| Comment: add                      |     Y     |     Team      |         Team         |   N    |    By scope     |
-| Comment: edit or delete own       |     Y     |       Y       |          Y           |   N    |    By scope     |
-| Comment: delete any               |     Y     |     Team      |          N           |   N    |        N        |
-| Attachment: add                   |     Y     |     Team      |         Team         |   N    |    By scope     |
-| Attachment: delete                |     Y     |     Team      |         Own          |   N    |        N        |
-| Saved view: create and share      |     Y     |     Team      |         Team         |  Own   |        N        |
-| Team configuration: edit          |     Y     |     Team      |          N           |   N    |     Granted     |
-| Org configuration: edit           |     Y     |       N       |          N           |   N    |     Granted     |
-| Audit log: view                   |     Y     |       N       |          N           |   N    |        N        |
-| Export items (always audited)     |     Y     |     Open      |         Open         |   N    |    By scope     |
+| Object: action                                   | Org admin |  Team admin   |        Member        | Viewer | Agent / API key |
+| ------------------------------------------------ | :-------: | :-----------: | :------------------: | :----: | :-------------: |
+| Work item: view                                  |     Y     |     Open      |         Open         |  Open  |    By scope     |
+| Work item: create                                |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Work item: edit fields                           |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Work item: change status                         |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Work item: assign                                |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Work item: move to another team                  |     Y     | Team (source) | Member of both teams |   N    |        N        |
+| Work item: delete (soft, 30 days)                |     Y     |     Team      |         Own          |   N    |     Granted     |
+| Work item: restore within 30 days                |     Y     |     Team      |         Own          |   N    |        N        |
+| Work item: delete permanently                    |     Y     |       N       |          N           |   N    |        N        |
+| Comment: add                                     |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Comment: edit or delete own                      |     Y     |       Y       |          Y           |   N    |    By scope     |
+| Comment: delete any                              |     Y     |     Team      |          N           |   N    |        N        |
+| Attachment: add                                  |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Attachment: delete                               |     Y     |     Team      |         Own          |   N    |        N        |
+| Saved view: create and share                     |     Y     |     Team      |         Team         |  Own   |        N        |
+| Team configuration: edit workflows and fields    |     Y     |     Team      |          N           |   N    |     Granted     |
+| Team configuration: edit membership and privacy  |     Y     |     Team      |          N           |   N    |        N        |
+| Org configuration: edit (non-security)           |     Y     |       N       |          N           |   N    |     Granted     |
+| Org security: roles, SSO, API keys, agent scopes |     Y     |       N       |          N           |   N    |        N        |
+| Audit log: view                                  |     Y     |       N       |          N           |   N    |        N        |
+| Export items (always audited)                    |     Y     |     Open      |         Open         |   N    |    By scope     |
 
 Org admins can view private teams; each such view is written to the audit log.
 
@@ -118,13 +121,12 @@ Org admins can view private teams; each such view is written to the audit log.
 |  9  | Do org admins see private teams?                                          | Yes, and each such access is audited                                                       |
 | 10  | Do client guests see internal notes, time entries, rates or other guests? | No to all four                                                                             |
 
-### Still open (raised by the decisions above)
+| 11 | May an agent be granted changes to roles, SSO, API keys or its own scopes? | No. Agents can never change security settings or who has access |
+| 12 | May members comment on, create or edit items in open teams they are not on? | No. Other open teams are read-only; changes only in teams they belong to |
+| 13 | Is an agent's delete always a soft delete that a human can restore? | Yes |
 
-|  #  | Question                                                                                    | Why it matters                                                                                           |
-| :-: | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| 11  | With decision 6, may an agent be granted changes to roles, SSO, API keys or its own scopes? | If yes, an agent could widen its own access. Claude's suggestion: exclude these from what can be granted |
-| 12  | With decision 1, may members comment on or create items in open teams they are not on?      | The matrix currently says no (Team). Many teams want cross-team comments                                 |
-| 13  | Does an agent's delete follow the same soft-delete rule, and who may restore it?            | The matrix says soft delete only, restored by a human                                                    |
+Decision 11 is applied to team membership and team privacy as well, because changing either
+changes who has access.
 
 ## 7. Field-level rules (proposed)
 
