@@ -11,3 +11,4 @@ cdk.out/
 *.log
 .claude/settings.local.json
 .mcp.local.json
+.data/
