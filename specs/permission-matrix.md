@@ -108,22 +108,21 @@ Org admins can view private teams; each such view is written to the audit log.
 
 ## 6. Decisions (answered by the owner, 16 Nov 2026)
 
-|  #  | Question                                                                  | Decision                                                                                   |
-| :-: | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-|  1  | Can internal members see items of teams they are not on?                  | Yes. Open by default, except teams marked private                                          |
-|  2  | Private teams or restricted items in the first release?                   | Private teams only. Per-item restriction later                                             |
-|  3  | Can members delete items?                                                 | Soft delete of their own items, restorable for 30 days. Permanent delete by org admin only |
-|  4  | Who can move an item to another team?                                     | A member of both teams, or a team admin of the source team                                 |
-|  5  | Who may export, and is it logged?                                         | Members, for items they can view. Every export is audited                                  |
-|  6  | Can agents and API keys delete or change configuration?                   | Yes to both, only if an org admin grants it, capped at the owner's access                  |
-|  7  | Is "viewer" needed at launch?                                             | Yes                                                                                        |
-|  8  | Does someone who leaves a team keep access to their old items?            | No. Access follows current membership and team visibility                                  |
-|  9  | Do org admins see private teams?                                          | Yes, and each such access is audited                                                       |
-| 10  | Do client guests see internal notes, time entries, rates or other guests? | No to all four                                                                             |
-
-| 11 | May an agent be granted changes to roles, SSO, API keys or its own scopes? | No. Agents can never change security settings or who has access |
-| 12 | May members comment on, create or edit items in open teams they are not on? | No. Other open teams are read-only; changes only in teams they belong to |
-| 13 | Is an agent's delete always a soft delete that a human can restore? | Yes |
+|  #  | Question                                                                    | Decision                                                                                   |
+| :-: | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+|  1  | Can internal members see items of teams they are not on?                    | Yes. Open by default, except teams marked private                                          |
+|  2  | Private teams or restricted items in the first release?                     | Private teams only. Per-item restriction later                                             |
+|  3  | Can members delete items?                                                   | Soft delete of their own items, restorable for 30 days. Permanent delete by org admin only |
+|  4  | Who can move an item to another team?                                       | A member of both teams, or a team admin of the source team                                 |
+|  5  | Who may export, and is it logged?                                           | Members, for items they can view. Every export is audited                                  |
+|  6  | Can agents and API keys delete or change configuration?                     | Yes to both, only if an org admin grants it, capped at the owner's access                  |
+|  7  | Is "viewer" needed at launch?                                               | Yes                                                                                        |
+|  8  | Does someone who leaves a team keep access to their old items?              | No. Access follows current membership and team visibility                                  |
+|  9  | Do org admins see private teams?                                            | Yes, and each such access is audited                                                       |
+| 10  | Do client guests see internal notes, time entries, rates or other guests?   | No to all four                                                                             |
+| 11  | May an agent be granted changes to roles, SSO, API keys or its own scopes?  | No. Agents can never change security settings or who has access                            |
+| 12  | May members comment on, create or edit items in open teams they are not on? | No. Other open teams are read-only; changes only in teams they belong to                   |
+| 13  | Is an agent's delete always a soft delete that a human can restore?         | Yes                                                                                        |
 
 Decision 11 is applied to team membership and team privacy as well, because changing either
 changes who has access.
