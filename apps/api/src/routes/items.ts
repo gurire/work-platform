@@ -80,6 +80,32 @@ export interface ItemRouteOptions {
 }
 
 export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRouteOptions): void {
+  /** Who the caller is, so the client can show the right name and teams. */
+  app.get('/me', async (request, reply) => {
+    const principal = await resolvePrincipal(db, request, devAuth)
+    if (!principal) return reply.code(401).send({ error: 'unauthenticated' })
+    const rows = await db.query<{ name: string }>('SELECT name FROM users WHERE id = $1', [
+      principal.id,
+    ])
+    return {
+      id: principal.id,
+      name: rows[0]?.name ?? principal.id,
+      orgRole: principal.orgRole,
+      teams: principal.teams,
+    }
+  })
+
+  /** Internal people, for assignee names and pickers. Any signed-in internal user may list them. */
+  app.get('/users', async (request, reply) => {
+    const principal = await resolvePrincipal(db, request, devAuth)
+    if (!principal) return reply.code(401).send({ error: 'unauthenticated' })
+    return {
+      users: await db.query<{ id: string; name: string }>(
+        'SELECT id, name FROM users ORDER BY name',
+      ),
+    }
+  })
+
   /** List items the caller may view. Hidden teams are filtered out in the query itself. */
   app.get<{ Querystring: { team?: string; q?: string; limit?: number; after?: string } }>(
     '/items',
@@ -167,7 +193,7 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
 
   app.patch<{
     Params: { id: string }
-    Body: { title?: string; statusId?: string; assigneeId?: string | null }
+    Body: { title?: string; statusId?: string; assigneeId?: string | null; priority?: number }
   }>(
     '/items/:id',
     {
@@ -180,6 +206,7 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
             title: { type: 'string', minLength: 1, maxLength: 500 },
             statusId: { type: 'string', maxLength: 64 },
             assigneeId: { type: ['string', 'null'], maxLength: 64 },
+            priority: { type: 'integer', minimum: 0, maximum: 4 },
           },
         },
       },
@@ -190,9 +217,9 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       const row = await loadVisibleItem(principal, request.params.id)
       if (!row) return reply.code(404).send({ error: 'not_found' })
 
-      const { title, statusId, assigneeId } = request.body
+      const { title, statusId, assigneeId, priority } = request.body
       const needed: PermissionAction[] = []
-      if (title !== undefined) needed.push('item.edit')
+      if (title !== undefined || priority !== undefined) needed.push('item.edit')
       if (statusId !== undefined) needed.push('item.transition')
       if (assigneeId !== undefined) needed.push('item.assign')
       const target = targetOf(row)
@@ -204,6 +231,9 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       const params: unknown[] = []
       const param = (value: unknown): string => `$${params.push(value)}`
       if (title !== undefined) sets.push(`title = ${param(title)}`)
+      if (priority !== undefined) {
+        sets.push(`fields = jsonb_set(fields, '{priority}', to_jsonb(${param(priority)}::int))`)
+      }
       if (statusId !== undefined) {
         // Workflows are not designed yet; until then the fixed sample statuses are the only ones.
         const status = SAMPLE_STATUSES.find((s) => s.id === statusId)

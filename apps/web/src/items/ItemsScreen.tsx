@@ -1,17 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import {
-  generateSampleWorkItems,
-  SAMPLE_PRIORITIES,
-  SAMPLE_STATUSES,
-  SAMPLE_USERS,
-} from '@wm/shared'
+import { SAMPLE_PRIORITIES, SAMPLE_STATUSES } from '@wm/shared'
+import { createApi, type ApiUser, type Me } from './api'
 import { CommandPalette, type Command } from './CommandPalette'
 import { ItemList, type Density } from './ItemList'
 import { measureInteraction, perfStore } from './perf'
 import { ItemStore, type CategoryFilter, type ItemPatch } from './store'
-import './spike.css'
+import './items.css'
 
-const ITEM_COUNT = 100_000
 const DENSITIES: readonly Density[] = ['compact', 'default', 'comfortable']
 const CATEGORIES: readonly { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -22,12 +17,25 @@ const CATEGORIES: readonly { id: CategoryFilter; label: string }[] = [
 type PaletteMode = 'all' | 'status' | 'assignee' | 'priority'
 type Theme = 'light' | 'dark'
 
-const store = new ItemStore()
-const generateStart = performance.now()
-store.load(generateSampleWorkItems(ITEM_COUNT))
-const generateMs = performance.now() - generateStart
+const USER_KEY = 'wm-dev-user'
+function readDevUser(): string {
+  try {
+    return localStorage.getItem(USER_KEY) ?? 'user-3'
+  } catch {
+    return 'user-3'
+  }
+}
+let devUser = readDevUser()
+const api = createApi(() => devUser)
+const store = new ItemStore(api.saveItem)
 
-export function Spike() {
+interface LoadState {
+  readonly status: 'loading' | 'ready' | 'error'
+  readonly ms: number
+  readonly message?: string
+}
+
+export function ItemsScreen() {
   const view = useSyncExternalStore(store.subscribe, store.getView)
   const toasts = useSyncExternalStore(store.subscribe, store.getToasts)
   const perf = useSyncExternalStore(perfStore.subscribe, perfStore.get)
@@ -37,7 +45,10 @@ export function Spike() {
     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
   )
   const [palette, setPalette] = useState<PaletteMode | null>(null)
-  const [rejecting, setRejecting] = useState(false)
+  const [userId, setUserId] = useState(devUser)
+  const [me, setMe] = useState<Me | null>(null)
+  const [users, setUsers] = useState<readonly ApiUser[]>([])
+  const [load, setLoad] = useState<LoadState>({ status: 'loading', ms: 0 })
   const [renderedRows, setRenderedRows] = useState(0)
   const filterRef = useRef<HTMLInputElement>(null)
   const eventTime = useRef(0)
@@ -49,6 +60,46 @@ export function Spike() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme
   }, [theme])
+
+  // Load who we are, the people list, then items page by page so the list fills in as it arrives.
+  useEffect(() => {
+    let cancelled = false
+    const started = performance.now()
+    devUser = userId
+    try {
+      localStorage.setItem(USER_KEY, userId)
+    } catch {
+      // Storage can be unavailable; the choice then lasts for this page only.
+    }
+    store.reset()
+    setCursor(0)
+    setMe(null)
+    setLoad({ status: 'loading', ms: 0 })
+    async function run(): Promise<void> {
+      const [meResult, userList] = await Promise.all([api.me(), api.users()])
+      if (cancelled) return
+      setMe(meResult)
+      setUsers(userList)
+      let after: string | null = null
+      do {
+        const page = await api.itemsPage(after)
+        if (cancelled) return
+        store.append(page.items)
+        after = page.nextAfter
+      } while (after)
+      setLoad({ status: 'ready', ms: performance.now() - started })
+    }
+    run().catch((error: unknown) => {
+      if (cancelled) return
+      const message = error instanceof Error ? error.message : 'loading failed'
+      setLoad({ status: 'error', ms: performance.now() - started, message })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
+
+  const userNames = useMemo(() => new Map(users.map((u) => [u.id, u.name])), [users])
 
   const edit = useCallback(
     (label: string, patch: ItemPatch) => {
@@ -71,11 +122,6 @@ export function Spike() {
     setDensity((value) => DENSITIES[(DENSITIES.indexOf(value) + 1) % DENSITIES.length] ?? 'default')
   }, [])
   const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
-  const toggleRejecting = useCallback(() => {
-    store.rejectSomeWrites = !store.rejectSomeWrites
-    setRejecting(store.rejectSomeWrites)
-  }, [])
-
   const commands = useMemo<Command[]>(() => {
     const status = SAMPLE_STATUSES.map((s) => ({
       id: `status-${s.id}`,
@@ -90,7 +136,7 @@ export function Spike() {
         label: 'Unassigned',
         run: () => edit('Change assignee', { assigneeId: null }),
       },
-      ...SAMPLE_USERS.map((u) => ({
+      ...users.map((u) => ({
         id: `assign-${u.id}`,
         group: 'Assign to',
         label: u.name,
@@ -138,14 +184,14 @@ export function Spike() {
         shortcut: '/',
         run: () => filterRef.current?.focus(),
       },
-      {
-        id: 'reject',
-        group: 'Spike',
-        label: rejecting ? 'Stop simulating server rejections' : 'Simulate server rejections',
-        run: toggleRejecting,
-      },
+      ...users.map((u) => ({
+        id: `signin-${u.id}`,
+        group: 'Dev sign-in',
+        label: `Act as ${u.name}`,
+        run: () => setUserId(u.id),
+      })),
     ]
-  }, [palette, edit, toggleTheme, cycleDensity, toggleRejecting, rejecting])
+  }, [palette, edit, toggleTheme, cycleDensity, users])
 
   const dynamicCommands = useCallback(
     (query: string): Command[] => {
@@ -218,7 +264,21 @@ export function Spike() {
     <div className={`shell density-${density}`}>
       <header className="toolbar">
         <strong className="brand">Work Platform</strong>
-        <span className="muted">UI shell spike</span>
+        <label className="muted dev-user">
+          Dev sign-in
+          <select
+            value={userId}
+            onChange={(event) => setUserId(event.target.value)}
+            aria-label="Development sign-in: act as"
+          >
+            {users.length === 0 && <option value={userId}>{userId}</option>}
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="tabs" role="tablist" aria-label="Status filter">
           {CATEGORIES.map((category) => (
             <button
@@ -268,6 +328,7 @@ export function Spike() {
         ids={ids}
         cursor={safeCursor}
         density={density}
+        userNames={userNames}
         onSelect={onSelect}
         onRenderedRows={setRenderedRows}
       />
@@ -277,7 +338,17 @@ export function Spike() {
           {ids.length.toLocaleString()} of {view.total.toLocaleString()} items
         </span>
         <span>{renderedRows} rows in DOM</span>
-        <span>generate {generateMs.toFixed(0)} ms</span>
+        <span className={load.status === 'error' ? 'hud-bad' : undefined}>
+          {load.status === 'loading' && 'loading…'}
+          {load.status === 'ready' && `loaded in ${load.ms.toFixed(0)} ms`}
+          {load.status === 'error' && `could not load: ${load.message}`}
+        </span>
+        {me && (
+          <span>
+            {me.name} · {me.orgRole.replace('_', ' ')} · teams:{' '}
+            {Object.keys(me.teams).join(', ') || 'none'}
+          </span>
+        )}
         <span>filter {view.filterMs.toFixed(1)} ms</span>
         {perf.map((stat) => (
           <span key={stat.label} className={stat.p95 > 100 ? 'hud-bad' : 'hud-good'}>
@@ -287,7 +358,6 @@ export function Spike() {
         ))}
         <span className="muted">
           J/K move · S status · A assignee · P priority · D density · T theme · Ctrl Z undo
-          {rejecting ? ' · rejections ON' : ''}
         </span>
       </footer>
 

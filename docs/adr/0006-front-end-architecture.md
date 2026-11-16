@@ -5,7 +5,7 @@ Status: proposed (2026-11-16). Merging this file to `main` accepts it.
 ## Context
 
 The UI/UX research (`docs/research/ui-ux-research.md`) and the UI shell spike
-(`docs/ui-shell-spike.md`) tested the direction for the first audience, engineering.
+(since replaced by `docs/running-locally.md`) tested the direction for the first audience, engineering.
 The spike rendered 100,000 generated items with local reads and optimistic writes.
 
 Measured on the owner's PC in dev mode, input to next paint (small sample, automated keys):
@@ -54,8 +54,9 @@ blocked the page for about 775 ms. The owner reported that everything felt smoot
 
 ## Consequences
 
-- The spike code in `apps/web/src/spike/` is throwaway. Production code reuses its patterns,
-  not its files, and adds the API, permissions and tests.
+- Update, 16 Nov 2026: the spike was promoted instead of rewritten. It now lives in
+  `apps/web/src/items/`, reads and writes through the API, and has tests. Its fake server and
+  generated in-browser data were removed.
 - Mutations are written twice (client optimistic, server authoritative); the server wins.
 - Fixed row heights rule out variable-height rows in lists; long text is truncated there and
   shown in full in the item view.

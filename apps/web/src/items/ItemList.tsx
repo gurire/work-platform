@@ -1,12 +1,11 @@
 import { memo, useEffect, useRef, useSyncExternalStore } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { SAMPLE_PRIORITIES, SAMPLE_STATUSES, SAMPLE_USERS } from '@wm/shared'
+import { SAMPLE_PRIORITIES, SAMPLE_STATUSES } from '@wm/shared'
 import type { ItemStore } from './store'
 
 export type Density = 'compact' | 'default' | 'comfortable'
 export const ROW_HEIGHT: Record<Density, number> = { compact: 28, default: 34, comfortable: 42 }
 
-const userName = new Map(SAMPLE_USERS.map((u) => [u.id, u.name]))
 const statusName = new Map(SAMPLE_STATUSES.map((s) => [s.id, s.name]))
 
 interface RowProps {
@@ -16,11 +15,21 @@ interface RowProps {
   active: boolean
   top: number
   height: number
+  userNames: ReadonlyMap<string, string>
   onSelect: (index: number) => void
 }
 
 /** Each row subscribes to its own item, so an edit re-renders one row, not the list. */
-const Row = memo(function Row({ store, id, index, active, top, height, onSelect }: RowProps) {
+const Row = memo(function Row({
+  store,
+  id,
+  index,
+  active,
+  top,
+  height,
+  userNames,
+  onSelect,
+}: RowProps) {
   const item = useSyncExternalStore(
     (listener) => store.subscribeItem(id, listener),
     () => store.getItem(id),
@@ -54,7 +63,7 @@ const Row = memo(function Row({ store, id, index, active, top, height, onSelect 
         {SAMPLE_PRIORITIES[priority] ?? 'None'}
       </span>
       <span role="gridcell" className="cell cell-assignee">
-        {item.assigneeId ? (userName.get(item.assigneeId) ?? item.assigneeId) : 'Unassigned'}
+        {item.assigneeId ? (userNames.get(item.assigneeId) ?? item.assigneeId) : 'Unassigned'}
       </span>
     </div>
   )
@@ -65,11 +74,20 @@ interface ItemListProps {
   ids: readonly string[]
   cursor: number
   density: Density
+  userNames: ReadonlyMap<string, string>
   onSelect: (index: number) => void
   onRenderedRows: (count: number) => void
 }
 
-export function ItemList({ store, ids, cursor, density, onSelect, onRenderedRows }: ItemListProps) {
+export function ItemList({
+  store,
+  ids,
+  cursor,
+  density,
+  userNames,
+  onSelect,
+  onRenderedRows,
+}: ItemListProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const height = ROW_HEIGHT[density]
   const virtualizer = useVirtualizer({
@@ -114,6 +132,7 @@ export function ItemList({ store, ids, cursor, density, onSelect, onRenderedRows
               active={row.index === cursor}
               top={row.start}
               height={height}
+              userNames={userNames}
               onSelect={onSelect}
             />
           )
