@@ -321,7 +321,7 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       entered_at: Date | string
       left_at: Date | string | null
       moved_by: string | null
-      kind: 'move' | 'forced' | 'reopen' | 'sent_back'
+      kind: 'move' | 'forced' | 'reopen' | 'sent_back' | 'automatic'
       reason: string | null
     }>(
       'SELECT stage_key, owner_id, entered_at, left_at, moved_by, kind, reason FROM stage_history WHERE item_id = $1 ORDER BY seq',
@@ -622,11 +622,34 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       }
       if (nextOwner !== row.assignee_id) sets.push(`assignee_id = ${param(nextOwner)}`)
 
+      // A person moving an item out of a stage it entered automatically is an override
+      // (specs/code-status.md, rule 8: audited).
+      let overridesAutomatic = false
+      if (stageChanged) {
+        const open = await db.query<{ kind: string }>(
+          'SELECT kind FROM stage_history WHERE item_id = $1 AND left_at IS NULL ORDER BY seq DESC LIMIT 1',
+          [row.id],
+        )
+        overridesAutomatic = open[0]?.kind === 'automatic'
+      }
+
       await db.transaction(async (tx) => {
         await tx.query(
           `UPDATE work_items SET ${sets.join(', ')} WHERE id = ${param(row.id)}`,
           params,
         )
+        if (overridesAutomatic) {
+          await tx.query(
+            'INSERT INTO audit_log (actor_id, action, team_id, object_id, detail) VALUES ($1, $2, $3, $4, $5::jsonb)',
+            [
+              principal.id,
+              'item.overrideAutomatic',
+              row.team_id,
+              row.id,
+              JSON.stringify({ from: row.status_id, to: statusId }),
+            ],
+          )
+        }
         if (stageChanged) {
           await tx.query(
             'UPDATE stage_history SET left_at = now() WHERE item_id = $1 AND left_at IS NULL',

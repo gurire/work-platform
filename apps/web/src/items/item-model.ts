@@ -7,7 +7,7 @@ export interface HistoryEntry {
   readonly enteredAt: string
   readonly leftAt: string | null
   readonly movedBy: string | null
-  readonly kind: 'move' | 'forced' | 'reopen' | 'sent_back'
+  readonly kind: 'move' | 'forced' | 'reopen' | 'sent_back' | 'automatic'
   readonly reason: string | null
 }
 

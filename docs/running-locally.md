@@ -116,3 +116,23 @@ springs back with the reason. Click a card to open the item. `Esc` returns to th
 - Team admins see **Limits** under each working stage to set or clear them. In the sample data,
   DATA's Validation has a limit of 30 and a 72-hour target, Processing a limit of 40, and
   Sourcing a 120-hour target.
+
+## Status that follows the code
+
+Engineering (ENG) items move by themselves when their pull requests change: opened → In
+Review, checks failed → In Progress, merged → Done. The same stage rules apply as for a
+person, and each automatic move shows its reason in the stage history. Anyone on the team can
+still move the item by hand; that override is written to the audit log.
+
+There is no real GitHub connection yet. With `pnpm dev` running, send made-up events from a
+second terminal:
+
+```
+pnpm code-event opened ENG-12
+pnpm code-event failed ENG-12
+pnpm code-event merged ENG-12
+```
+
+Then open ENG-12: the **Code** panel shows the pull request and its checks, and the stage
+history shows each automatic move. An item only moves where its stage allows, so pick an ENG
+item that is In Progress (moving from Todo straight to In Review is not an allowed move).

@@ -117,6 +117,26 @@ export interface ItemRecord {
   readonly canLink: boolean
 }
 
+export interface ItemCode {
+  readonly pullRequests: readonly {
+    repo: string
+    number: number
+    url: string | null
+    title: string | null
+    state: 'open' | 'merged' | 'closed'
+    checks: 'passing' | 'failing' | null
+    updatedAt: string
+  }[]
+  readonly events: readonly {
+    repo: string
+    number: number
+    kind: string
+    outcome: 'moved' | 'not_moved' | 'no_rule'
+    detail: string | null
+    at: string
+  }[]
+}
+
 export interface Me extends ApiUser {
   readonly orgRole: 'org_admin' | 'member' | 'viewer'
   readonly teams: Readonly<Record<string, 'admin' | 'member'>>
@@ -255,6 +275,7 @@ export function createApi(getUser: () => string) {
         method: 'POST',
         body: '{}',
       }),
+    code: (id: string) => request<ItemCode>(`/items/${encodeURIComponent(id)}/code`),
     board: (teamId: string) =>
       request<{ counts: Record<string, number>; enteredAt: Record<string, string> }>(
         `/teams/${encodeURIComponent(teamId)}/board`,
