@@ -154,6 +154,88 @@ const MIGRATIONS: readonly { id: string; sql: string }[] = [
       CREATE INDEX step_events_pass ON step_events (history_seq, step_id, seq);
     `,
   },
+  {
+    // Review rounds (specs/reviews.md). Expand only: wider checks, new nullable column, new tables.
+    id: '0004_reviews',
+    sql: `
+      ALTER TABLE team_members DROP CONSTRAINT team_members_role_check;
+      ALTER TABLE team_members ADD CONSTRAINT team_members_role_check
+        CHECK (role IN ('admin', 'member', 'reviewer'));
+      ALTER TABLE stage_history DROP CONSTRAINT stage_history_kind_check;
+      ALTER TABLE stage_history ADD CONSTRAINT stage_history_kind_check
+        CHECK (kind IN ('move', 'forced', 'reopen', 'sent_back'));
+      -- A stage with a send-back stage is a review stage.
+      ALTER TABLE stages ADD COLUMN review_send_back_to text;
+      CREATE TABLE review_rounds (
+        id            bigserial PRIMARY KEY,
+        item_id       text NOT NULL REFERENCES work_items (id),
+        number        integer NOT NULL,
+        history_seq   bigint NOT NULL REFERENCES stage_history (seq),
+        stage_key     text NOT NULL,
+        requested_by  text NOT NULL REFERENCES users (id),
+        opened_at     timestamptz NOT NULL DEFAULT now(),
+        state         text NOT NULL DEFAULT 'open'
+          CHECK (state IN ('open', 'approved', 'changes_requested', 'withdrawn')),
+        closed_at     timestamptz,
+        closed_by     text REFERENCES users (id),
+        UNIQUE (item_id, number)
+      );
+      -- At most one open round per item (rule 2).
+      CREATE UNIQUE INDEX review_rounds_one_open ON review_rounds (item_id) WHERE state = 'open';
+      CREATE TABLE review_reviewers (
+        round_id  bigint NOT NULL REFERENCES review_rounds (id),
+        user_id   text NOT NULL REFERENCES users (id),
+        PRIMARY KEY (round_id, user_id)
+      );
+      -- Append-only (rule 10): the latest verdict per reviewer is the one that counts.
+      CREATE TABLE review_verdicts (
+        seq       bigserial PRIMARY KEY,
+        round_id  bigint NOT NULL REFERENCES review_rounds (id),
+        user_id   text NOT NULL REFERENCES users (id),
+        verdict   text NOT NULL CHECK (verdict IN ('approved', 'changes_requested')),
+        comment   text,
+        at        timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX review_verdicts_round ON review_verdicts (round_id, seq);
+    `,
+  },
+  {
+    // Records (specs/records.md). Expand only: new tables and a nullable link on work items.
+    id: '0005_records',
+    sql: `
+      CREATE TABLE record_types (
+        key         text PRIMARY KEY,
+        name        text NOT NULL,
+        fields      jsonb NOT NULL DEFAULT '[]'::jsonb,
+        created_at  timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE records (
+        seq          bigserial UNIQUE,
+        id           text PRIMARY KEY,
+        type_key     text NOT NULL REFERENCES record_types (key),
+        team_id      text NOT NULL REFERENCES teams (id),
+        title        text NOT NULL,
+        values       jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_by   text REFERENCES users (id),
+        created_at   timestamptz NOT NULL DEFAULT now(),
+        updated_at   timestamptz NOT NULL DEFAULT now(),
+        archived_at  timestamptz
+      );
+      CREATE INDEX records_team ON records (team_id, type_key);
+      -- Append-only (rule 3): who changed which fields, from what, to what.
+      CREATE TABLE record_events (
+        seq        bigserial PRIMARY KEY,
+        record_id  text NOT NULL REFERENCES records (id),
+        actor_id   text REFERENCES users (id),
+        action     text NOT NULL CHECK (action IN ('created', 'edited', 'archived')),
+        changes    jsonb NOT NULL DEFAULT '[]'::jsonb,
+        at         timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX record_events_record ON record_events (record_id, seq);
+      ALTER TABLE work_items ADD COLUMN record_id text REFERENCES records (id);
+      CREATE INDEX work_items_record ON work_items (record_id) WHERE record_id IS NOT NULL;
+    `,
+  },
 ]
 
 export async function migrate(db: Db): Promise<string[]> {

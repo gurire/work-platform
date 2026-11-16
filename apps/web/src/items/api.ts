@@ -1,4 +1,12 @@
-import type { Stage, StageTransition, WorkItem } from '@wm/shared'
+import type {
+  RecordType,
+  RecordValue,
+  RoundState,
+  Stage,
+  StageTransition,
+  Verdict,
+  WorkItem,
+} from '@wm/shared'
 import type { HistoryEntry } from './item-model'
 import type { ItemPatch } from './store'
 
@@ -14,6 +22,7 @@ export interface ApiTeam {
   readonly handOffClearsOwner: boolean
   readonly stages: readonly Stage[]
   readonly transitions: readonly StageTransition[]
+  readonly reviewStages: readonly { stageKey: string; sendBackTo: string }[]
 }
 
 export interface WorkflowStep {
@@ -28,9 +37,79 @@ export interface Workflow {
   readonly stageKey: string
   readonly steps: readonly WorkflowStep[]
   readonly requiredFields: readonly { key: string; label: string; filled: boolean }[]
+  readonly review: { sendBackTo: string; approved: boolean } | null
   readonly missing: readonly string[]
   readonly allowedMoves: readonly string[]
   readonly canForce: boolean
+}
+
+export interface ReviewRound {
+  readonly id: string
+  readonly number: number
+  readonly stageKey: string
+  readonly requestedBy: string
+  readonly openedAt: string
+  readonly state: RoundState
+  readonly closedAt: string | null
+  readonly closedBy: string | null
+  readonly reviewers: readonly {
+    userId: string
+    verdict: Verdict | null
+    comment: string | null
+    at: string | null
+  }[]
+  readonly history: readonly {
+    userId: string
+    verdict: Verdict
+    comment: string | null
+    at: string
+  }[]
+}
+
+export interface Reviews {
+  readonly reviewStage: { stageKey: string; sendBackTo: string } | null
+  readonly approved: boolean
+  readonly canOpen: boolean
+  readonly canVerdict: boolean
+  readonly canWithdraw: boolean
+  readonly rounds: readonly ReviewRound[]
+}
+
+export interface RecordSummary {
+  readonly id: string
+  readonly typeKey: string
+  readonly teamId: string
+  readonly title: string
+  readonly values: Readonly<Record<string, RecordValue>>
+  readonly archived: boolean
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+export interface RecordDetail {
+  readonly record: RecordSummary
+  readonly type: RecordType | null
+  readonly canEdit: boolean
+  readonly canArchive: boolean
+  readonly items: readonly {
+    id: string
+    key: string
+    title: string
+    statusId: string
+    teamId: string
+  }[]
+  readonly history: readonly {
+    actorId: string | null
+    action: 'created' | 'edited' | 'archived'
+    changes: readonly { field: string; from: RecordValue; to: RecordValue }[]
+    at: string
+  }[]
+}
+
+export interface ItemRecord {
+  readonly record: RecordSummary | null
+  readonly type: RecordType | null
+  readonly canLink: boolean
 }
 
 export interface Me extends ApiUser {
@@ -46,8 +125,37 @@ const REASONS: Record<number, string> = {
 }
 
 /** Turns a refusal into a sentence a person can act on. */
-function explain(status: number, body: { error?: string; missing?: string[] }): string {
+function explain(
+  status: number,
+  body: { error?: string; missing?: string[]; field?: string },
+): string {
   switch (body.error) {
+    case 'invalid_value':
+      return `the value for ${body.field ?? 'a field'} does not fit it`
+    case 'required_missing':
+      return `${body.field ?? 'a required field'} is required`
+    case 'unknown_record':
+      return 'that record is not available'
+    case 'archived':
+      return 'that record is archived'
+    case 'self_review':
+      return 'nobody can review their own work: not whoever asks for the review, nor the stage owner'
+    case 'not_a_reviewer':
+      return 'one of those people cannot review items in this team'
+    case 'round_open':
+      return 'a review round is already open for this item'
+    case 'round_closed':
+      return 'that review round has already closed'
+    case 'comment_required':
+      return 'say what needs to change'
+    case 'not_review_stage':
+      return 'this stage does not take reviews'
+    case 'not_reviewer':
+      return 'you are not a reviewer in this round'
+    case 'already_approved':
+      return 'this stage has already been approved'
+    case 'send_back_invalid':
+      return 'the stage to send items back to is not set up correctly; ask a team admin'
     case 'requirements_unmet':
       return `this stage still needs: ${(body.missing ?? []).join(', ')}`
     case 'not_allowed':
@@ -77,7 +185,7 @@ export function createApi(getUser: () => string) {
       throw new Error('the server could not be reached')
     }
     if (!response.ok) {
-      let body: { error?: string; missing?: string[] } = {}
+      let body: { error?: string; missing?: string[]; field?: string } = {}
       try {
         body = (await response.json()) as typeof body
       } catch {
@@ -120,6 +228,43 @@ export function createApi(getUser: () => string) {
       })
       return body.item
     },
+    reviews: (id: string) => request<Reviews>(`/items/${encodeURIComponent(id)}/reviews`),
+    openReview: (id: string, reviewers: readonly string[]) =>
+      request<Reviews>(`/items/${encodeURIComponent(id)}/reviews`, {
+        method: 'POST',
+        body: JSON.stringify({ reviewers }),
+      }),
+    giveVerdict: (roundId: string, verdict: Verdict, comment: string) =>
+      request<Reviews>(`/reviews/${encodeURIComponent(roundId)}/verdict`, {
+        method: 'POST',
+        body: JSON.stringify(comment.trim() ? { verdict, comment } : { verdict }),
+      }),
+    withdrawReview: (roundId: string) =>
+      request<Reviews>(`/reviews/${encodeURIComponent(roundId)}/withdraw`, {
+        method: 'POST',
+        body: '{}',
+      }),
+    itemRecord: (id: string) => request<ItemRecord>(`/items/${encodeURIComponent(id)}/record`),
+    linkRecord: (id: string, recordId: string | null) =>
+      request<{ item: WorkItem | null }>(`/items/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ recordId }),
+      }),
+    findRecords: (q: string) =>
+      request<{ records: RecordSummary[] }>(`/records?q=${encodeURIComponent(q)}`).then(
+        (body) => body.records,
+      ),
+    record: (id: string) => request<RecordDetail>(`/records/${encodeURIComponent(id)}`),
+    updateRecord: (id: string, patch: { title?: string; values?: Record<string, RecordValue> }) =>
+      request<RecordDetail>(`/records/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
+    archiveRecord: (id: string) =>
+      request<RecordDetail>(`/records/${encodeURIComponent(id)}/archive`, {
+        method: 'POST',
+        body: '{}',
+      }),
     /** Sends one change and returns the item as the server now has it. */
     saveItem: async (item: WorkItem, patch: ItemPatch): Promise<WorkItem | null> => {
       const body = await request<{ item: WorkItem | null }>(

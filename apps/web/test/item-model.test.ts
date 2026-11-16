@@ -61,6 +61,8 @@ describe('routes', () => {
     expect(parseRoute('#/item/DATA-12')).toEqual({ page: 'item', key: 'DATA-12' })
     expect(parseRoute('')).toEqual({ page: 'list' })
     expect(parseRoute('#/item/<script>')).toEqual({ page: 'list' })
+    expect(parseRoute('#/record/rec-dataset-3')).toEqual({ page: 'record', id: 'rec-dataset-3' })
+    expect(parseRoute('#/record/a b')).toEqual({ page: 'list' })
     expect(itemHash('ENG-1')).toBe('#/item/ENG-1')
   })
 })

@@ -6,6 +6,11 @@
  * Do not change behaviour here without a change to the spec, approved by the owner.
  * Stage actions (tick a step, force a move, reopen) come from specs/workflow.md, section 4.
  * Editing stage rules is `team.config.edit`.
+ * Review actions and the reviewer team role come from specs/reviews.md, section 4; setting up
+ * review stages is also `team.config.edit`.
+ * Record actions come from specs/records.md, section 4; the target team is the record's home
+ * team. Seeing a record is `item.view` on its home team (records are never visible more
+ * widely than the home team's items). Editing the record type catalogue is `org.config.edit`.
  */
 
 export const PERMISSION_ACTIONS = [
@@ -21,6 +26,12 @@ export const PERMISSION_ACTIONS = [
   'item.tickStep',
   'item.forceMove',
   'item.reopen',
+  'review.open',
+  'review.verdict',
+  'review.withdraw',
+  'record.create',
+  'record.edit',
+  'record.archive',
   'comment.add',
   'comment.editOwn',
   'comment.deleteAny',
@@ -38,7 +49,8 @@ export const PERMISSION_ACTIONS = [
 export type PermissionAction = (typeof PERMISSION_ACTIONS)[number]
 
 export type OrgRole = 'org_admin' | 'member' | 'viewer'
-export type TeamRole = 'admin' | 'member'
+/** A reviewer checks work but does not do it: view, comment, give verdicts (specs/reviews.md). */
+export type TeamRole = 'admin' | 'member' | 'reviewer'
 
 export interface UserPrincipal {
   readonly kind: 'user'
@@ -89,6 +101,9 @@ const ALLOW_AUDITED: Decision = { allowed: true, audit: true }
 const AGENT_NEVER: ReadonlySet<PermissionAction> = new Set([
   'item.move',
   'item.forceMove',
+  'review.verdict',
+  'review.withdraw',
+  'record.archive',
   'item.restore',
   'item.purge',
   'comment.deleteAny',
@@ -145,7 +160,10 @@ function decideForUser(
   }
 
   const teamRole = user.teams[team.id]
-  const inTeam = teamRole !== undefined
+  // Any role in the team, reviewers included: enough to comment and give verdicts.
+  const onTeam = teamRole !== undefined
+  // Admins and members do the work; reviewers only check it.
+  const inTeam = teamRole === 'admin' || teamRole === 'member'
   const isTeamAdmin = teamRole === 'admin'
   const visible = canSeeTeam(user, team)
   const isCreator = target.createdBy !== undefined && target.createdBy === user.id
@@ -165,27 +183,38 @@ function decideForUser(
     case 'item.edit':
     case 'item.transition':
     case 'item.assign':
-    case 'comment.add':
     case 'attachment.add':
-    case 'savedView.manage':
     case 'item.tickStep':
     case 'item.reopen':
+    case 'review.open':
+    case 'record.create':
+    case 'record.edit':
       return inTeam ? ALLOW : DENY
+    case 'record.archive':
+      return isTeamAdmin ? ALLOW : DENY
+    case 'savedView.manage':
+      // A reviewer, like a viewer, may keep views of their own.
+      return inTeam || (onTeam && isCreator) ? ALLOW : DENY
+    case 'comment.add':
+    case 'review.verdict':
+      return onTeam ? ALLOW : DENY
+    case 'review.withdraw':
+      // "Own" here means the person who opened the round (createdBy).
+      return isTeamAdmin || (inTeam && isCreator) ? ALLOW : DENY
     case 'item.forceMove':
       return isTeamAdmin ? ALLOW_AUDITED : DENY
     case 'item.move': {
       if (isTeamAdmin) return ALLOW
       const destination = target.destinationTeam
-      return inTeam && destination !== undefined && user.teams[destination.id] !== undefined
-        ? ALLOW
-        : DENY
+      const destinationRole = destination ? user.teams[destination.id] : undefined
+      return inTeam && (destinationRole === 'admin' || destinationRole === 'member') ? ALLOW : DENY
     }
     case 'item.delete':
     case 'item.restore':
     case 'attachment.delete':
       return isTeamAdmin || (inTeam && isCreator) ? ALLOW : DENY
     case 'comment.editOwn':
-      return inTeam && isCreator ? ALLOW : DENY
+      return onTeam && isCreator ? ALLOW : DENY
     case 'comment.deleteAny':
     case 'team.config.edit':
       return isTeamAdmin ? ALLOW : DENY

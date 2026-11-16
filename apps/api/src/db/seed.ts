@@ -29,6 +29,28 @@ const DATASETS = [
   'Vehicle registrations by fuel',
 ]
 
+const SOURCES = [
+  'Meteorological department',
+  'Education department',
+  'Roads department',
+  'Health department',
+  'Agriculture department',
+]
+
+const DATASET_FIELDS = [
+  { key: 'source', label: 'Source', kind: 'text', required: true },
+  {
+    key: 'frequency',
+    label: 'Frequency',
+    kind: 'choice',
+    required: false,
+    options: ['monthly', 'quarterly', 'yearly'],
+  },
+  { key: 'rows', label: 'Rows', kind: 'number', required: false },
+  { key: 'refreshed', label: 'Last refreshed', kind: 'date', required: false },
+  { key: 'url', label: 'Link', kind: 'link', required: false },
+]
+
 export async function seedDevData(db: Db, itemCount = 2000, pipelineCount = 300): Promise<void> {
   const existing = await db.query<{ count: string }>('SELECT count(*) AS count FROM users')
   if (Number(existing[0]?.count ?? 0) > 0) return
@@ -88,7 +110,41 @@ export async function seedDevData(db: Db, itemCount = 2000, pipelineCount = 300)
   await db.exec(`INSERT INTO stage_required_fields (team_id, stage_key, field_key, label) VALUES
     ('DATA', 'validation', 'coverage', 'Coverage')`)
   await db.exec(`INSERT INTO team_members (team_id, user_id, role) VALUES
-    ('DATA', 'user-7', 'admin'), ('DATA', 'user-3', 'member'), ('DATA', 'user-4', 'member')`)
+    ('DATA', 'user-7', 'admin'), ('DATA', 'user-3', 'member'), ('DATA', 'user-4', 'member'),
+    ('DATA', 'user-9', 'reviewer')`)
+  // Validation is also a review stage: changes requested send the item back to Processing.
+  await db.exec(
+    "UPDATE stages SET review_send_back_to = 'processing' WHERE team_id = 'DATA' AND key = 'validation'",
+  )
+
+  // Records (specs/records.md): one Dataset record per dataset, looked after by DATA.
+  await db.query(
+    "INSERT INTO record_types (key, name, fields) VALUES ('dataset', 'Dataset', $1::jsonb)",
+    [JSON.stringify(DATASET_FIELDS)],
+  )
+  const frequencies = ['monthly', 'quarterly', 'yearly'] as const
+  for (const [index, name] of DATASETS.entries()) {
+    const values = {
+      source: SOURCES[index % SOURCES.length] ?? 'Department',
+      frequency: frequencies[index % frequencies.length] ?? 'yearly',
+      rows: 1000 + index * 731,
+      refreshed: `2026-${String((index % 9) + 1).padStart(2, '0')}-15`,
+      url: `https://example.org/data/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    }
+    await db.query(
+      "INSERT INTO records (id, type_key, team_id, title, values, created_by) VALUES ($1, 'dataset', 'DATA', $2, $3::jsonb, 'user-7')",
+      [`rec-dataset-${index + 1}`, name, JSON.stringify(values)],
+    )
+    await db.query(
+      "INSERT INTO record_events (record_id, actor_id, action) VALUES ($1, 'user-7', 'created')",
+      [`rec-dataset-${index + 1}`],
+    )
+  }
+  // A record in the private SEC team, which only SEC members can see.
+  await db.query(
+    "INSERT INTO records (id, type_key, team_id, title, values, created_by) VALUES ('rec-sec-1', 'dataset', 'SEC', 'Access logs', $1::jsonb, 'user-2')",
+    [JSON.stringify({ source: 'Internal systems', frequency: 'monthly' })],
+  )
 
   const items = generateSampleWorkItems(itemCount)
   await db.exec('BEGIN')
@@ -124,6 +180,11 @@ export async function seedDevData(db: Db, itemCount = 2000, pipelineCount = 300)
     assigneeId: 'user-2',
     createdBy: 'user-2',
   })
+  // Each DATA item is about the dataset in its title.
+  await db.exec(`UPDATE work_items
+    SET record_id = 'rec-dataset-' || ((substring(key from 6)::int - 1) % ${DATASETS.length} + 1)
+    WHERE team_id = 'DATA'`)
+  await db.exec("UPDATE work_items SET record_id = 'rec-sec-1' WHERE id = 'item-sec-1'")
   await db.exec('COMMIT')
 }
 

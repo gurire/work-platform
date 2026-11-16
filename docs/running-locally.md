@@ -73,3 +73,32 @@ list, `Esc` back to the list.
 To try the rules, open a DATA item in Validation as Chen Wei (the default sign-in, a DATA
 member): the forward move is held back until the steps are ticked and Coverage is filled in.
 Then act as Grace Lim (DATA team admin) to see **Force to …**.
+
+## Reviews
+
+DATA's Validation stage is also a review stage. Before an item can move on, it needs an
+approved review round as well as the ticked steps and Coverage.
+
+1. As Chen Wei, open a DATA item in Validation and press **Ask for review**. Pick Ines Costa
+   (a DATA reviewer) and anyone else; everyone picked must approve. You cannot pick yourself or
+   the item's owner.
+2. Act as Ines Costa and open the same item. **Approve**, or write a comment and press
+   **Request changes**. Asking for changes ends the round and sends the item back to
+   Processing, with the comment shown in the stage history.
+3. Once every reviewer approves, "Review approved" is ticked off; someone still moves the item
+   on. If it comes back to Validation later, it needs a new round.
+
+## Records
+
+Each DATA item is about a dataset, and the dataset's facts (source, frequency, rows, last
+refreshed, link) live once on a **record** instead of being copied onto every item.
+
+- On an item page, the dataset card on the right shows the record. **Change** or **Unlink**
+  switches the item to another record.
+- Click the record's title to open it. DATA members can edit the facts there, and the change
+  shows on every item about that dataset. The history lists every change with old and new
+  values. Other teams can see the record but not change it.
+- A DATA team admin (Grace Lim) can archive a record. It stays on its items but can no longer
+  be changed or chosen for new items.
+
+If you ran the app before records were added, delete `apps/api/.data` once to get them.

@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { can, isEndStage, SAMPLE_PRIORITIES, type UserPrincipal } from '@wm/shared'
+import {
+  can,
+  isEndStage,
+  REVIEW_REQUIREMENT,
+  SAMPLE_PRIORITIES,
+  type UserPrincipal,
+} from '@wm/shared'
 import type { Api, ApiTeam, ApiUser, Me, Workflow, WorkflowStep } from './api'
 import { buildStageStrip, timeAgo, type HistoryEntry } from './item-model'
+import { RecordCard } from './RecordCard'
+import { ReviewPanel } from './ReviewPanel'
 import type { ItemStore } from './store'
 
 interface Props {
@@ -14,6 +22,7 @@ interface Props {
   /** e.g. "Item 3 of 120", or null when the item is not in the current list. */
   positionLabel: string | null
   onBack: () => void
+  onOpenRecord: (id: string) => void
 }
 
 const message = (error: unknown) =>
@@ -24,10 +33,21 @@ function missingOf(workflow: Workflow): string[] {
   return [
     ...workflow.steps.filter((step) => !step.ticked).map((step) => step.label),
     ...workflow.requiredFields.filter((field) => !field.filled).map((field) => field.label),
+    ...(workflow.review && !workflow.review.approved ? [REVIEW_REQUIREMENT] : []),
   ]
 }
 
-export function ItemPage({ api, store, itemKey, me, teams, users, positionLabel, onBack }: Props) {
+export function ItemPage({
+  api,
+  store,
+  itemKey,
+  me,
+  teams,
+  users,
+  positionLabel,
+  onBack,
+  onOpenRecord,
+}: Props) {
   const [id, setId] = useState<string | undefined>(() => store.idForKey(itemKey))
   const [notFound, setNotFound] = useState(false)
   const [workflow, setWorkflow] = useState<Workflow | null>(null)
@@ -228,9 +248,12 @@ export function ItemPage({ api, store, itemKey, me, teams, users, positionLabel,
               )}
             </div>
             {!workflow && <p className="muted">Loading…</p>}
-            {workflow && workflow.steps.length === 0 && workflow.requiredFields.length === 0 && (
-              <p className="muted">{current?.name ?? 'This stage'} has no requirements.</p>
-            )}
+            {workflow &&
+              workflow.steps.length === 0 &&
+              workflow.requiredFields.length === 0 &&
+              !workflow.review && (
+                <p className="muted">{current?.name ?? 'This stage'} has no requirements.</p>
+              )}
             {workflow?.steps.map((step) => (
               <label key={step.id} className="check-row">
                 <input
@@ -364,6 +387,16 @@ export function ItemPage({ api, store, itemKey, me, teams, users, positionLabel,
             )}
           </section>
 
+          <ReviewPanel
+            api={api}
+            store={store}
+            item={item}
+            meId={me?.id ?? null}
+            users={users}
+            stageName={stageName}
+            onChanged={() => setReload((n) => n + 1)}
+          />
+
           <section className="panel" aria-labelledby="activity-title">
             <h2 id="activity-title">Stage history</h2>
             <ul className="activity">
@@ -376,7 +409,9 @@ export function ItemPage({ api, store, itemKey, me, teams, users, positionLabel,
                         ? `${nameOf(entry.movedBy)} forced it to ${stageName(entry.stageKey)}`
                         : entry.kind === 'reopen'
                           ? `${nameOf(entry.movedBy)} reopened it to ${stageName(entry.stageKey)}`
-                          : `${nameOf(entry.movedBy)} moved it to ${stageName(entry.stageKey)}`}
+                          : entry.kind === 'sent_back'
+                            ? `${nameOf(entry.movedBy)} asked for changes; sent back to ${stageName(entry.stageKey)}`
+                            : `${nameOf(entry.movedBy)} moved it to ${stageName(entry.stageKey)}`}
                     {entry.reason ? `: "${entry.reason}"` : ''}
                   </span>
                   <span className="muted">
@@ -428,6 +463,7 @@ export function ItemPage({ api, store, itemKey, me, teams, users, positionLabel,
             <dt>Created</dt>
             <dd>{timeAgo(item.createdAt)}</dd>
           </dl>
+          <RecordCard api={api} store={store} item={item} onOpenRecord={onOpenRecord} />
         </aside>
       </div>
     </main>
