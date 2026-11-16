@@ -1,5 +1,5 @@
 /**
- * PROTECTED TEST. Generated from specs/permission-matrix.md, section 5 (approved 16 Nov 2026).
+ * PROTECTED TEST. Generated from specs/permission-matrix.md, section 5 (approved 16 Nov 2026; decision 14 added the same day).
  * Human-owned: do not edit to make code pass. If a row looks wrong, raise it with the owner
  * and change the spec first.
  */
@@ -144,6 +144,20 @@ const rows: Row[] = [
     false,
   ],
   ['viewer cannot edit a comment', viewer, 'comment.editOwn', inA({ createdBy: 'viewer' }), false],
+  [
+    'ex-member cannot edit their old comment (decision 14)',
+    exMemberA,
+    'comment.editOwn',
+    inA({ createdBy: 'ex-member-a' }),
+    false,
+  ],
+  [
+    'member cannot edit own comment in a team they are not on',
+    memberA,
+    'comment.editOwn',
+    inB({ createdBy: 'member-a' }),
+    false,
+  ],
   ['team admin deletes any comment in team', adminA, 'comment.deleteAny', inA(), true],
   ['team admin cannot delete comments elsewhere', adminA, 'comment.deleteAny', inB(), false],
   ['member cannot delete any comment', memberA, 'comment.deleteAny', inA(), false],

@@ -4,12 +4,11 @@
 <table>
   <tr><td valign="middle"><b>Date</b></td><td valign="middle">16 Nov 2026</td></tr>
   <tr><td valign="middle"><b>Reference</b></td><td valign="middle">SPEC-PERM-001</td></tr>
-  <tr><td valign="middle"><b>Subject</b></td><td valign="middle">Draft outline of roles, objects, actions and surfaces, for the owner to decide</td></tr>
+  <tr><td valign="middle"><b>Subject</b></td><td valign="middle">Roles, objects, actions and surfaces, with the owner's decisions</td></tr>
 </table>
 
-**Status: DRAFT, decisions recorded, not yet approved.** Claude drafted this and the owner answered
-the decisions in section 6 on 16 Nov 2026. It becomes binding when the owner merges it.
-Once merged, this file is human-owned and generates the protected permission tests.
+**Status: APPROVED by the owner on 16 Nov 2026.** This file is human-owned. Claude reads it but
+must not change it without the owner's say-so. It drives the protected permission tests.
 
 ---
 
@@ -92,7 +91,7 @@ An agent's delete is always a soft delete, restored only by a person.
 | Work item: restore within 30 days                |     Y     |     Team      |         Own          |   N    |        N        |
 | Work item: delete permanently                    |     Y     |       N       |          N           |   N    |        N        |
 | Comment: add                                     |     Y     |     Team      |         Team         |   N    |    By scope     |
-| Comment: edit or delete own                      |     Y     |       Y       |          Y           |   N    |    By scope     |
+| Comment: edit or delete own                      |     Y     |     Team      |         Team         |   N    |    By scope     |
 | Comment: delete any                              |     Y     |     Team      |          N           |   N    |        N        |
 | Attachment: add                                  |     Y     |     Team      |         Team         |   N    |    By scope     |
 | Attachment: delete                               |     Y     |     Team      |         Own          |   N    |        N        |
@@ -123,6 +122,7 @@ Org admins can view private teams; each such view is written to the audit log.
 | 11  | May an agent be granted changes to roles, SSO, API keys or its own scopes?  | No. Agents can never change security settings or who has access                            |
 | 12  | May members comment on, create or edit items in open teams they are not on? | No. Other open teams are read-only; changes only in teams they belong to                   |
 | 13  | Is an agent's delete always a soft delete that a human can restore?         | Yes                                                                                        |
+| 14  | Can someone edit their own comment in a team they have left?                | No. Own comments can be edited only in teams they currently belong to                      |
 
 Decision 11 is applied to team membership and team privacy as well, because changing either
 changes who has access.
