@@ -265,8 +265,10 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       category: Stage['category']
       position: number
       review_send_back_to: string | null
+      item_limit: number | null
+      target_hours: number | null
     }>(
-      'SELECT team_id, key, name, category, position, review_send_back_to FROM stages ORDER BY team_id, position',
+      'SELECT team_id, key, name, category, position, review_send_back_to, item_limit, target_hours FROM stages ORDER BY team_id, position',
     )
     const transitions = await db.query<{ team_id: string; from_key: string; to_key: string }>(
       'SELECT team_id, from_key, to_key FROM stage_transitions',
@@ -292,6 +294,17 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
         reviewStages: stages
           .filter((stage) => stage.team_id === team.id && stage.review_send_back_to !== null)
           .map((stage) => ({ stageKey: stage.key, sendBackTo: stage.review_send_back_to })),
+        stageLimits: stages
+          .filter(
+            (stage) =>
+              stage.team_id === team.id &&
+              (stage.item_limit !== null || stage.target_hours !== null),
+          )
+          .map((stage) => ({
+            stageKey: stage.key,
+            itemLimit: stage.item_limit,
+            targetHours: stage.target_hours,
+          })),
       })),
     }
   })

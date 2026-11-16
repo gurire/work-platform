@@ -42,7 +42,7 @@ If you ran the app before stages were added, delete `apps/api/.data` once to get
 
 ## Keys
 
-`J`/`K` or arrows move; `S` stage, `A` owner, `P` priority; `Ctrl K` every command, or an
+`J`/`K` or arrows move; `Enter` open; `B` board; `S` stage, `A` owner, `P` priority; `Ctrl K` every command, or an
 item key such as `ENG-42`; `/` filter; `D` density; `T` theme; `Ctrl Z` undo.
 
 Edits show immediately. If the server refuses one (for example, changing an item in a team you
@@ -102,3 +102,17 @@ refreshed, link) live once on a **record** instead of being copied onto every it
   be changed or chosen for new items.
 
 If you ran the app before records were added, delete `apps/api/.data` once to get them.
+
+## Board, limits and waiting targets
+
+Press `B` (or the **Board** button) to see the selected item's team as columns, one per stage.
+Drag a card to move it; the same stage rules apply as on the item page, so a refused move
+springs back with the reason. Click a card to open the item. `Esc` returns to the list.
+
+- A column heading shows how many items the stage holds, and its limit if it has one: amber at
+  the limit, red over it. Limits warn; they never stop a move.
+- A card shows how long the item has been in its stage. It turns red when that is longer than
+  the stage's target.
+- Team admins see **Limits** under each working stage to set or clear them. In the sample data,
+  DATA's Validation has a limit of 30 and a 72-hour target, Processing a limit of 40, and
+  Sourcing a 120-hour target.

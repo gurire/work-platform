@@ -4,6 +4,7 @@ import {
   buildStageStrip,
   itemHash,
   parseRoute,
+  shortDuration,
   timeAgo,
   type HistoryEntry,
 } from '../src/items/item-model'
@@ -63,6 +64,16 @@ describe('routes', () => {
     expect(parseRoute('#/item/<script>')).toEqual({ page: 'list' })
     expect(parseRoute('#/record/rec-dataset-3')).toEqual({ page: 'record', id: 'rec-dataset-3' })
     expect(parseRoute('#/record/a b')).toEqual({ page: 'list' })
+    expect(parseRoute('#/board/DATA')).toEqual({ page: 'board', teamId: 'DATA' })
     expect(itemHash('ENG-1')).toBe('#/item/ENG-1')
+  })
+})
+
+describe('shortDuration', () => {
+  it('uses hours up to two days, then days', () => {
+    expect(shortDuration(0.5)).toBe('<1 h')
+    expect(shortDuration(5.9)).toBe('5 h')
+    expect(shortDuration(47)).toBe('47 h')
+    expect(shortDuration(72)).toBe('3 d')
   })
 })

@@ -23,6 +23,11 @@ export interface ApiTeam {
   readonly stages: readonly Stage[]
   readonly transitions: readonly StageTransition[]
   readonly reviewStages: readonly { stageKey: string; sendBackTo: string }[]
+  readonly stageLimits: readonly {
+    stageKey: string
+    itemLimit: number | null
+    targetHours: number | null
+  }[]
 }
 
 export interface WorkflowStep {
@@ -130,6 +135,12 @@ function explain(
   body: { error?: string; missing?: string[]; field?: string },
 ): string {
   switch (body.error) {
+    case 'end_stage':
+      return 'done and cancelled stages cannot have limits'
+    case 'invalid_limit':
+      return 'a limit must be a whole number from 1 to 999'
+    case 'invalid_target':
+      return 'a target must be a whole number of hours from 1 to 8760'
     case 'invalid_value':
       return `the value for ${body.field ?? 'a field'} does not fit it`
     case 'required_missing':
@@ -244,6 +255,20 @@ export function createApi(getUser: () => string) {
         method: 'POST',
         body: '{}',
       }),
+    board: (teamId: string) =>
+      request<{ counts: Record<string, number>; enteredAt: Record<string, string> }>(
+        `/teams/${encodeURIComponent(teamId)}/board`,
+      ),
+    setLimits: (
+      teamId: string,
+      stageKey: string,
+      itemLimit: number | null,
+      targetHours: number | null,
+    ) =>
+      request<{ stageKey: string; itemLimit: number | null; targetHours: number | null }>(
+        `/teams/${encodeURIComponent(teamId)}/stages/${encodeURIComponent(stageKey)}/limits`,
+        { method: 'PUT', body: JSON.stringify({ itemLimit, targetHours }) },
+      ),
     itemRecord: (id: string) => request<ItemRecord>(`/items/${encodeURIComponent(id)}/record`),
     linkRecord: (id: string, recordId: string | null) =>
       request<{ item: WorkItem | null }>(`/items/${encodeURIComponent(id)}`, {

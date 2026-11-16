@@ -108,4 +108,17 @@ describe('ItemStore', () => {
     expect(store.idForKey('ops-9999')).toBe('item-new')
     expect(store.getView().total).toBe(1001)
   })
+
+  it('itemsForTeam ignores the filter, and the revision moves on every change', () => {
+    const teamId = store.getItem('item-1')!.teamId
+    const all = store.itemsForTeam(teamId)
+    store.applyFilter('no such item anywhere', 'all')
+    expect(store.itemsForTeam(teamId)).toHaveLength(all.length)
+    const before = store.getRevision()
+    const listener = vi.fn()
+    store.subscribeChanges(listener)
+    store.mutate('item-1', { assigneeId: null })
+    expect(store.getRevision()).toBeGreaterThan(before)
+    expect(listener).toHaveBeenCalled()
+  })
 })

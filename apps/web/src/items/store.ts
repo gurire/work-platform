@@ -37,6 +37,9 @@ export class ItemStore {
   private readonly haystack = new Map<string, string>()
   private readonly itemListeners = new Map<string, Set<Listener>>()
   private readonly listeners = new Set<Listener>()
+  private readonly changeListeners = new Set<Listener>()
+  /** Goes up whenever any item is added or changed, for screens that show many items. */
+  private revision = 0
   private allIds: string[] = []
   private viewSnapshot: ViewSnapshot = {
     ids: [],
@@ -68,6 +71,7 @@ export class ItemStore {
     this.haystack.clear()
     this.allIds = []
     this.undoStack = []
+    this.changed()
     this.applyFilter(this.viewSnapshot.query, this.viewSnapshot.category)
   }
 
@@ -81,6 +85,7 @@ export class ItemStore {
     }
     // A new array, so subscribers see the view change.
     this.allIds = [...this.allIds]
+    this.changed()
     this.applyFilter(this.viewSnapshot.query, this.viewSnapshot.category)
   }
 
@@ -89,6 +94,23 @@ export class ItemStore {
   getView = (): ViewSnapshot => this.viewSnapshot
   getToasts = (): readonly Toast[] => this.toastList
   idForKey = (key: string): string | undefined => this.keyToId.get(key.toLowerCase())
+  getRevision = (): number => this.revision
+
+  /** Notified when any item is added or changed. */
+  subscribeChanges = (listener: Listener): (() => void) => {
+    this.changeListeners.add(listener)
+    return () => this.changeListeners.delete(listener)
+  }
+
+  /** Every loaded item of one team, ignoring the list filter. */
+  itemsForTeam(teamId: string): WorkItem[] {
+    const result: WorkItem[] = []
+    for (const id of this.allIds) {
+      const item = this.items.get(id)
+      if (item?.teamId === teamId) result.push(item)
+    }
+    return result
+  }
 
   subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener)
@@ -184,6 +206,12 @@ export class ItemStore {
   private setItem(item: WorkItem): void {
     this.items.set(item.id, item)
     this.itemListeners.get(item.id)?.forEach((listener) => listener())
+    this.changed()
+  }
+
+  private changed(): void {
+    this.revision++
+    this.changeListeners.forEach((listener) => listener())
   }
 
   private emit(): void {

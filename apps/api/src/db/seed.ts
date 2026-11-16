@@ -116,6 +116,11 @@ export async function seedDevData(db: Db, itemCount = 2000, pipelineCount = 300)
   await db.exec(
     "UPDATE stages SET review_send_back_to = 'processing' WHERE team_id = 'DATA' AND key = 'validation'",
   )
+  // Limits and targets (specs/stage-limits.md), set low enough that the board shows warnings.
+  await db.exec(`UPDATE stages SET item_limit = 30, target_hours = 72
+    WHERE team_id = 'DATA' AND key = 'validation'`)
+  await db.exec(`UPDATE stages SET item_limit = 40 WHERE team_id = 'DATA' AND key = 'processing'`)
+  await db.exec(`UPDATE stages SET target_hours = 120 WHERE team_id = 'DATA' AND key = 'sourcing'`)
 
   // Records (specs/records.md): one Dataset record per dataset, looked after by DATA.
   await db.query(
@@ -185,6 +190,10 @@ export async function seedDevData(db: Db, itemCount = 2000, pipelineCount = 300)
     SET record_id = 'rec-dataset-' || ((substring(key from 6)::int - 1) % ${DATASETS.length} + 1)
     WHERE team_id = 'DATA'`)
   await db.exec("UPDATE work_items SET record_id = 'rec-sec-1' WHERE id = 'item-sec-1'")
+  // Spread out how long DATA items have waited in their stage (0 to 8 days), for the board.
+  await db.exec(`UPDATE stage_history h
+    SET entered_at = now() - make_interval(hours => (substring(w.key from 6)::int * 7) % 200)
+    FROM work_items w WHERE w.id = h.item_id AND w.team_id = 'DATA'`)
   await db.exec('COMMIT')
 }
 
