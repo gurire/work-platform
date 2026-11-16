@@ -1,7 +1,7 @@
 /**
- * Spike-only local store. Reads come from memory, writes apply immediately and a fake
- * server confirms or rejects them later. This is NOT the sync engine and has no permission
- * layer; it exists to measure how the UI feels with local-first reads and optimistic writes.
+ * Local item store. Screens read from memory; writes apply immediately and are then sent to
+ * the server. If the server refuses, the change is reverted and a toast explains why. This is
+ * the single rejection path from ADR 0006: screens do not handle write errors themselves.
  */
 import type { StatusCategory, WorkItem } from '@wm/shared'
 import { SAMPLE_STATUSES } from '@wm/shared'
@@ -46,20 +46,30 @@ export class ItemStore {
   private toastList: readonly Toast[] = []
   private undoStack: Change[] = []
   private nextToastId = 1
-  /** When on, the fake server rejects about one write in three. */
-  rejectSomeWrites = false
 
-  load(items: readonly WorkItem[]): void {
+  /** `save` sends one change to the server and rejects with a readable message if refused. */
+  constructor(private readonly save: (item: WorkItem, patch: ItemPatch) => Promise<void>) {}
+
+  /** Forget everything, for example when the signed-in user changes. */
+  reset(): void {
     this.items.clear()
     this.keyToId.clear()
     this.haystack.clear()
     this.allIds = []
+    this.undoStack = []
+    this.applyFilter(this.viewSnapshot.query, this.viewSnapshot.category)
+  }
+
+  /** Add a page of items as it arrives; the view updates without waiting for the rest. */
+  append(items: readonly WorkItem[]): void {
     for (const item of items) {
+      if (!this.items.has(item.id)) this.allIds.push(item.id)
       this.items.set(item.id, item)
       this.keyToId.set(item.key.toLowerCase(), item.id)
       this.haystack.set(item.id, `${item.key} ${item.title}`.toLowerCase())
-      this.allIds.push(item.id)
     }
+    // A new array, so subscribers see the view change.
+    this.allIds = [...this.allIds]
     this.applyFilter(this.viewSnapshot.query, this.viewSnapshot.category)
   }
 
@@ -107,7 +117,7 @@ export class ItemStore {
   }
 
   // --- writes ------------------------------------------------------------------------------
-  /** Apply a change locally right away, then let the fake server confirm or reject it. */
+  /** Apply a change locally right away, then send it. A refusal reverts it with a toast. */
   mutate(id: string, patch: ItemPatch): void {
     const before = this.items.get(id)
     if (!before) return
@@ -117,22 +127,30 @@ export class ItemStore {
     this.undoStack.push(change)
     if (this.undoStack.length > 50) this.undoStack.shift()
 
-    const latency = 150 + Math.random() * 250
-    setTimeout(() => {
-      if (!this.rejectSomeWrites || Math.random() > 0.33) return
-      // Only revert if nothing newer has replaced this write.
-      if (this.items.get(id) !== after) return
-      this.setItem(before)
+    this.save(before, patch).catch((error: unknown) => {
       this.undoStack = this.undoStack.filter((c) => c !== change)
-      this.toast(`${before.key}: the server rejected that change, so it was reverted.`)
-    }, latency)
+      // Only revert if nothing newer has replaced this write.
+      if (this.items.get(id) === after) this.setItem(before)
+      const reason = error instanceof Error ? error.message : 'the server rejected that change'
+      this.toast(`${before.key}: ${reason}. The change was reverted.`)
+    })
   }
 
+  /** Undo the last change by sending the previous values as a new change. */
   undo(): void {
     const change = this.undoStack.pop()
     if (!change) return
-    if (this.items.get(change.id) === change.after) this.setItem(change.before)
-    this.toast(`${change.before.key}: change undone.`)
+    const { before, after } = change
+    const patch: ItemPatch = {
+      ...(before.statusId !== after.statusId ? { statusId: before.statusId } : {}),
+      ...(before.assigneeId !== after.assigneeId ? { assigneeId: before.assigneeId } : {}),
+      ...(before.fields.priority !== after.fields.priority
+        ? { priority: Number(before.fields.priority ?? 0) }
+        : {}),
+    }
+    this.mutate(change.id, patch)
+    this.undoStack.pop() // the undo itself is not something to undo
+    this.toast(`${before.key}: change undone.`)
   }
 
   toast(message: string): void {

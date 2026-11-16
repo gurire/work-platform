@@ -169,6 +169,44 @@ describe('API visibility (permission matrix on the API surface)', () => {
     expect(rows).toEqual([{ actor_id: 'org-admin', action: 'item.view', object_id: 'p1' }])
   })
 
+  it('requires sign-in for /me and /users and reports the caller', async () => {
+    expect((await app.inject({ method: 'GET', url: '/me' })).statusCode).toBe(401)
+    expect((await app.inject({ method: 'GET', url: '/users' })).statusCode).toBe(401)
+    const me = await app.inject({ method: 'GET', url: '/me', headers: as('member-a') })
+    expect(me.json()).toEqual({
+      id: 'member-a',
+      name: 'Member A',
+      orgRole: 'member',
+      teams: { A: 'member' },
+    })
+    const users = await app.inject({ method: 'GET', url: '/users', headers: as('viewer') })
+    expect(users.json().users).toHaveLength(5)
+  })
+
+  it('changes priority only for members of the team', async () => {
+    const own = await app.inject({
+      method: 'PATCH',
+      url: '/items/a1',
+      headers: as('member-a'),
+      payload: { priority: 3 },
+    })
+    expect(own.json().item.fields).toEqual({ priority: 3 })
+    const other = await app.inject({
+      method: 'PATCH',
+      url: '/items/a1',
+      headers: as('member-b'),
+      payload: { priority: 1 },
+    })
+    expect(other.statusCode).toBe(403)
+    const bad = await app.inject({
+      method: 'PATCH',
+      url: '/items/a1',
+      headers: as('member-a'),
+      payload: { priority: 9 },
+    })
+    expect(bad.statusCode).toBe(400)
+  })
+
   it('pages through results without skipping or repeating', async () => {
     const first = await app.inject({
       method: 'GET',

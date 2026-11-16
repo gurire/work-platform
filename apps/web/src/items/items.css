@@ -1,4 +1,4 @@
-/* Spike tokens. Alias tokens only; themes swap their values. Colours in OKLCH. */
+/* Tokens. Alias tokens only; themes swap their values. Colours in OKLCH. */
 :root {
   color-scheme: light;
   --surface: oklch(0.985 0.003 200);
@@ -293,4 +293,19 @@ kbd {
     opacity: 0;
     transform: translateY(-4px);
   }
+}
+
+.dev-user {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.dev-user select {
+  min-height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
 }

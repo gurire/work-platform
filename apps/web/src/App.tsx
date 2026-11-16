@@ -1,6 +1,5 @@
-import { Spike } from './spike/Spike'
+import { ItemsScreen } from './items/ItemsScreen'
 
-/** Temporary: the app renders the UI shell spike. See docs/ui-shell-spike.md. */
 export function App() {
-  return <Spike />
+  return <ItemsScreen />
 }
