@@ -56,6 +56,60 @@ const MIGRATIONS: readonly { id: string; sql: string }[] = [
       );
     `,
   },
+  {
+    // Stages (ADR 0007, step 1). An item's status_id is the key of a stage in its team.
+    id: '0002_stages',
+    sql: `
+      ALTER TABLE teams ADD COLUMN hand_off_clears_owner boolean NOT NULL DEFAULT false;
+      CREATE TABLE stages (
+        team_id   text NOT NULL REFERENCES teams (id),
+        key       text NOT NULL,
+        name      text NOT NULL,
+        category  text NOT NULL CHECK (category IN ('todo', 'in_progress', 'done', 'cancelled')),
+        position  integer NOT NULL,
+        PRIMARY KEY (team_id, key)
+      );
+      CREATE TABLE stage_history (
+        seq         bigserial PRIMARY KEY,
+        item_id     text NOT NULL REFERENCES work_items (id),
+        stage_key   text NOT NULL,
+        owner_id    text REFERENCES users (id),
+        entered_at  timestamptz NOT NULL DEFAULT now(),
+        left_at     timestamptz
+      );
+      CREATE INDEX stage_history_item ON stage_history (item_id, seq);
+
+      -- Every team always has a workflow: a new team starts with the default stages.
+      CREATE FUNCTION add_default_stages() RETURNS trigger AS $fn$
+      BEGIN
+        INSERT INTO stages (team_id, key, name, category, position) VALUES
+          (NEW.id, 'backlog', 'Backlog', 'todo', 1),
+          (NEW.id, 'todo', 'Todo', 'todo', 2),
+          (NEW.id, 'in_progress', 'In Progress', 'in_progress', 3),
+          (NEW.id, 'in_review', 'In Review', 'in_progress', 4),
+          (NEW.id, 'done', 'Done', 'done', 5),
+          (NEW.id, 'cancelled', 'Cancelled', 'cancelled', 6);
+        RETURN NEW;
+      END;
+      $fn$ LANGUAGE plpgsql;
+      CREATE TRIGGER teams_default_stages AFTER INSERT ON teams
+        FOR EACH ROW EXECUTE FUNCTION add_default_stages();
+
+      -- Existing teams and items.
+      INSERT INTO stages (team_id, key, name, category, position)
+        SELECT t.id, s.key, s.name, s.category, s.position
+        FROM teams t CROSS JOIN (VALUES
+          ('backlog', 'Backlog', 'todo', 1), ('todo', 'Todo', 'todo', 2),
+          ('in_progress', 'In Progress', 'in_progress', 3),
+          ('in_review', 'In Review', 'in_progress', 4),
+          ('done', 'Done', 'done', 5), ('cancelled', 'Cancelled', 'cancelled', 6)
+        ) AS s (key, name, category, position);
+      INSERT INTO stage_history (item_id, stage_key, owner_id, entered_at)
+        SELECT id, status_id, assignee_id, updated_at FROM work_items;
+      ALTER TABLE work_items ADD CONSTRAINT work_items_stage
+        FOREIGN KEY (team_id, status_id) REFERENCES stages (team_id, key);
+    `,
+  },
 ]
 
 export async function migrate(db: Db): Promise<string[]> {

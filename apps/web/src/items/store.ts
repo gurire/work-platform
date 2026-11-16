@@ -3,8 +3,7 @@
  * the server. If the server refuses, the change is reverted and a toast explains why. This is
  * the single rejection path from ADR 0006: screens do not handle write errors themselves.
  */
-import type { StatusCategory, WorkItem } from '@wm/shared'
-import { SAMPLE_STATUSES } from '@wm/shared'
+import type { Stage, StatusCategory, WorkItem } from '@wm/shared'
 
 type Listener = () => void
 export type CategoryFilter = 'all' | StatusCategory
@@ -48,7 +47,16 @@ export class ItemStore {
   private nextToastId = 1
 
   /** `save` sends one change to the server and rejects with a readable message if refused. */
-  constructor(private readonly save: (item: WorkItem, patch: ItemPatch) => Promise<void>) {}
+  constructor(
+    private readonly save: (item: WorkItem, patch: ItemPatch) => Promise<WorkItem | null | void>,
+  ) {}
+
+  private stages = new Map<string, Stage>()
+
+  /** The stages of every visible team, so a stage change can show its category at once. */
+  setStages(stages: readonly Stage[]): void {
+    this.stages = new Map(stages.map((stage) => [`${stage.teamId}:${stage.key}`, stage]))
+  }
 
   /** Forget everything, for example when the signed-in user changes. */
   reset(): void {
@@ -121,19 +129,26 @@ export class ItemStore {
   mutate(id: string, patch: ItemPatch): void {
     const before = this.items.get(id)
     if (!before) return
-    const after = applyPatch(before, patch)
+    const after = this.applyPatch(before, patch)
     this.setItem(after)
     const change: Change = { id, before, after }
     this.undoStack.push(change)
     if (this.undoStack.length > 50) this.undoStack.shift()
 
-    this.save(before, patch).catch((error: unknown) => {
-      this.undoStack = this.undoStack.filter((c) => c !== change)
-      // Only revert if nothing newer has replaced this write.
-      if (this.items.get(id) === after) this.setItem(before)
-      const reason = error instanceof Error ? error.message : 'the server rejected that change'
-      this.toast(`${before.key}: ${reason}. The change was reverted.`)
-    })
+    this.save(before, patch).then(
+      (saved) => {
+        // The server has the last word (for example, a hand-over may clear the owner),
+        // unless a newer local change has replaced this one in the meantime.
+        if (saved && this.items.get(id) === after) this.setItem(saved)
+      },
+      (error: unknown) => {
+        this.undoStack = this.undoStack.filter((c) => c !== change)
+        // Only revert if nothing newer has replaced this write.
+        if (this.items.get(id) === after) this.setItem(before)
+        const reason = error instanceof Error ? error.message : 'the server rejected that change'
+        this.toast(`${before.key}: ${reason}. The change was reverted.`)
+      },
+    )
   }
 
   /** Undo the last change by sending the previous values as a new change. */
@@ -171,17 +186,21 @@ export class ItemStore {
   private emit(): void {
     this.listeners.forEach((listener) => listener())
   }
-}
 
-function applyPatch(item: WorkItem, patch: ItemPatch): WorkItem {
-  let next: WorkItem = item
-  if (patch.statusId !== undefined) {
-    const status = SAMPLE_STATUSES.find((s) => s.id === patch.statusId)
-    if (status) next = { ...next, statusId: status.id, statusCategory: status.category }
+  private applyPatch(item: WorkItem, patch: ItemPatch): WorkItem {
+    let next: WorkItem = item
+    if (patch.statusId !== undefined) {
+      const stage = this.stages.get(`${item.teamId}:${patch.statusId}`)
+      next = {
+        ...next,
+        statusId: patch.statusId,
+        statusCategory: stage?.category ?? next.statusCategory,
+      }
+    }
+    if (patch.assigneeId !== undefined) next = { ...next, assigneeId: patch.assigneeId }
+    if (patch.priority !== undefined) {
+      next = { ...next, fields: { ...next.fields, priority: patch.priority } }
+    }
+    return next
   }
-  if (patch.assigneeId !== undefined) next = { ...next, assigneeId: patch.assigneeId }
-  if (patch.priority !== undefined) {
-    next = { ...next, fields: { ...next.fields, priority: patch.priority } }
-  }
-  return next
 }

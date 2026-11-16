@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { SAMPLE_PRIORITIES, SAMPLE_STATUSES } from '@wm/shared'
-import { createApi, type ApiUser, type Me } from './api'
+import { SAMPLE_PRIORITIES } from '@wm/shared'
+import { createApi, type ApiTeam, type ApiUser, type Me } from './api'
 import { CommandPalette, type Command } from './CommandPalette'
 import { ItemList, type Density } from './ItemList'
 import { measureInteraction, perfStore } from './perf'
@@ -48,6 +48,7 @@ export function ItemsScreen() {
   const [userId, setUserId] = useState(devUser)
   const [me, setMe] = useState<Me | null>(null)
   const [users, setUsers] = useState<readonly ApiUser[]>([])
+  const [teams, setTeams] = useState<readonly ApiTeam[]>([])
   const [load, setLoad] = useState<LoadState>({ status: 'loading', ms: 0 })
   const [renderedRows, setRenderedRows] = useState(0)
   const filterRef = useRef<HTMLInputElement>(null)
@@ -76,10 +77,12 @@ export function ItemsScreen() {
     setMe(null)
     setLoad({ status: 'loading', ms: 0 })
     async function run(): Promise<void> {
-      const [meResult, userList] = await Promise.all([api.me(), api.users()])
+      const [meResult, userList, teamList] = await Promise.all([api.me(), api.users(), api.teams()])
       if (cancelled) return
       setMe(meResult)
       setUsers(userList)
+      setTeams(teamList)
+      store.setStages(teamList.flatMap((team) => team.stages))
       let after: string | null = null
       do {
         const page = await api.itemsPage(after)
@@ -100,6 +103,20 @@ export function ItemsScreen() {
   }, [userId])
 
   const userNames = useMemo(() => new Map(users.map((u) => [u.id, u.name])), [users])
+  const stageNames = useMemo(
+    () =>
+      new Map(
+        teams.flatMap((team) =>
+          team.stages.map((stage) => [`${stage.teamId}:${stage.key}`, stage.name] as const),
+        ),
+      ),
+    [teams],
+  )
+  const currentItem = useSyncExternalStore(
+    (listener) => (currentId ? store.subscribeItem(currentId, listener) : () => {}),
+    () => (currentId ? store.getItem(currentId) : undefined),
+  )
+  const currentTeam = teams.find((team) => team.id === currentItem?.teamId)
 
   const edit = useCallback(
     (label: string, patch: ItemPatch) => {
@@ -123,11 +140,12 @@ export function ItemsScreen() {
   }, [])
   const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
   const commands = useMemo<Command[]>(() => {
-    const status = SAMPLE_STATUSES.map((s) => ({
-      id: `status-${s.id}`,
-      group: 'Set status',
+    // Only the stages of the selected item's own team are offered.
+    const status = (currentTeam?.stages ?? []).map((s) => ({
+      id: `status-${s.key}`,
+      group: 'Move to stage',
       label: s.name,
-      run: () => edit('Change status', { statusId: s.id }),
+      run: () => edit('Change stage', { statusId: s.key }),
     }))
     const assignee = [
       {
@@ -191,7 +209,7 @@ export function ItemsScreen() {
         run: () => setUserId(u.id),
       })),
     ]
-  }, [palette, edit, toggleTheme, cycleDensity, users])
+  }, [palette, edit, toggleTheme, cycleDensity, users, currentTeam])
 
   const dynamicCommands = useCallback(
     (query: string): Command[] => {
@@ -318,7 +336,7 @@ export function ItemsScreen() {
         <span className="cell cell-key">Key</span>
         <span className="cell cell-title">Title</span>
         <span className="cell cell-kind">Kind</span>
-        <span className="cell cell-status">Status</span>
+        <span className="cell cell-status">Stage</span>
         <span className="cell cell-priority">Priority</span>
         <span className="cell cell-assignee">Assignee</span>
       </div>
@@ -329,6 +347,7 @@ export function ItemsScreen() {
         cursor={safeCursor}
         density={density}
         userNames={userNames}
+        stageNames={stageNames}
         onSelect={onSelect}
         onRenderedRows={setRenderedRows}
       />
@@ -357,7 +376,7 @@ export function ItemsScreen() {
           </span>
         ))}
         <span className="muted">
-          J/K move · S status · A assignee · P priority · D density · T theme · Ctrl Z undo
+          J/K move · S stage · A owner · P priority · D density · T theme · Ctrl Z undo
         </span>
       </footer>
 
@@ -376,7 +395,7 @@ export function ItemsScreen() {
             palette === 'all'
               ? 'Type a command or an item key (e.g. ENG-42)'
               : palette === 'status'
-                ? 'Set status'
+                ? 'Move to stage'
                 : palette === 'assignee'
                   ? 'Assign to'
                   : 'Set priority'

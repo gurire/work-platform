@@ -1,12 +1,10 @@
 import { memo, useEffect, useRef, useSyncExternalStore } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { SAMPLE_PRIORITIES, SAMPLE_STATUSES } from '@wm/shared'
+import { SAMPLE_PRIORITIES } from '@wm/shared'
 import type { ItemStore } from './store'
 
 export type Density = 'compact' | 'default' | 'comfortable'
 export const ROW_HEIGHT: Record<Density, number> = { compact: 28, default: 34, comfortable: 42 }
-
-const statusName = new Map(SAMPLE_STATUSES.map((s) => [s.id, s.name]))
 
 interface RowProps {
   store: ItemStore
@@ -16,6 +14,7 @@ interface RowProps {
   top: number
   height: number
   userNames: ReadonlyMap<string, string>
+  stageNames: ReadonlyMap<string, string>
   onSelect: (index: number) => void
 }
 
@@ -28,6 +27,7 @@ const Row = memo(function Row({
   top,
   height,
   userNames,
+  stageNames,
   onSelect,
 }: RowProps) {
   const item = useSyncExternalStore(
@@ -57,7 +57,7 @@ const Row = memo(function Row({
       </span>
       <span role="gridcell" className={`cell cell-status status-${item.statusCategory}`}>
         <span className="status-dot" aria-hidden="true" />
-        {statusName.get(item.statusId) ?? item.statusId}
+        {stageNames.get(`${item.teamId}:${item.statusId}`) ?? item.statusId}
       </span>
       <span role="gridcell" className="cell cell-priority">
         {SAMPLE_PRIORITIES[priority] ?? 'None'}
@@ -75,6 +75,7 @@ interface ItemListProps {
   cursor: number
   density: Density
   userNames: ReadonlyMap<string, string>
+  stageNames: ReadonlyMap<string, string>
   onSelect: (index: number) => void
   onRenderedRows: (count: number) => void
 }
@@ -85,6 +86,7 @@ export function ItemList({
   cursor,
   density,
   userNames,
+  stageNames,
   onSelect,
   onRenderedRows,
 }: ItemListProps) {
@@ -133,6 +135,7 @@ export function ItemList({
               top={row.start}
               height={height}
               userNames={userNames}
+              stageNames={stageNames}
               onSelect={onSelect}
             />
           )

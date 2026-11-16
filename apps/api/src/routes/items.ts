@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify'
 import {
   decide,
-  SAMPLE_STATUSES,
   type PermissionAction,
   type PermissionTarget,
   type UserPrincipal,
+  type Stage,
   type WorkItem,
 } from '@wm/shared'
 import type { Db } from '../db/db.js'
@@ -103,6 +103,72 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       users: await db.query<{ id: string; name: string }>(
         'SELECT id, name FROM users ORDER BY name',
       ),
+    }
+  })
+
+  /** Teams the caller may see, each with its workflow stages in order. */
+  app.get('/teams', async (request, reply) => {
+    const principal = await resolvePrincipal(db, request, devAuth)
+    if (!principal) return reply.code(401).send({ error: 'unauthenticated' })
+    const teams = await db.query<{
+      id: string
+      name: string
+      is_private: boolean
+      hand_off_clears_owner: boolean
+    }>('SELECT id, name, is_private, hand_off_clears_owner FROM teams ORDER BY name')
+    const visible = teams.filter(
+      (team) =>
+        decide(principal, 'item.view', { team: { id: team.id, isPrivate: team.is_private } })
+          .allowed,
+    )
+    const stages = await db.query<{
+      team_id: string
+      key: string
+      name: string
+      category: Stage['category']
+      position: number
+    }>('SELECT team_id, key, name, category, position FROM stages ORDER BY team_id, position')
+    return {
+      teams: visible.map((team) => ({
+        id: team.id,
+        name: team.name,
+        isPrivate: team.is_private,
+        handOffClearsOwner: team.hand_off_clears_owner,
+        stages: stages
+          .filter((stage) => stage.team_id === team.id)
+          .map((stage): Stage => ({
+            teamId: stage.team_id,
+            key: stage.key,
+            name: stage.name,
+            category: stage.category,
+            position: stage.position,
+          })),
+      })),
+    }
+  })
+
+  /** Who owned each stage of an item, oldest first. */
+  app.get<{ Params: { id: string } }>('/items/:id/stages', async (request, reply) => {
+    const principal = await resolvePrincipal(db, request, devAuth)
+    if (!principal) return reply.code(401).send({ error: 'unauthenticated' })
+    const row = await loadVisibleItem(principal, request.params.id)
+    if (!row) return reply.code(404).send({ error: 'not_found' })
+    const history = await db.query<{
+      stage_key: string
+      owner_id: string | null
+      entered_at: Date | string
+      left_at: Date | string | null
+    }>(
+      'SELECT stage_key, owner_id, entered_at, left_at FROM stage_history WHERE item_id = $1 ORDER BY seq',
+      [row.id],
+    )
+    return {
+      history: history.map((entry) => ({
+        stageKey: entry.stage_key,
+        ownerId: entry.owner_id,
+        enteredAt: iso(entry.entered_at),
+        leftAt: entry.left_at ? iso(entry.left_at) : null,
+      })),
     }
   })
 
@@ -234,20 +300,55 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       if (priority !== undefined) {
         sets.push(`fields = jsonb_set(fields, '{priority}', to_jsonb(${param(priority)}::int))`)
       }
+      // The stage must belong to the item's own team.
+      const stageChanged = statusId !== undefined && statusId !== row.status_id
       if (statusId !== undefined) {
-        // Workflows are not designed yet; until then the fixed sample statuses are the only ones.
-        const status = SAMPLE_STATUSES.find((s) => s.id === statusId)
-        if (!status) return reply.code(400).send({ error: 'unknown_status' })
-        sets.push(`status_id = ${param(status.id)}`, `status_category = ${param(status.category)}`)
+        const stages = await db.query<{ category: string }>(
+          'SELECT category FROM stages WHERE team_id = $1 AND key = $2',
+          [row.team_id, statusId],
+        )
+        const stage = stages[0]
+        if (!stage) return reply.code(400).send({ error: 'unknown_status' })
+        sets.push(`status_id = ${param(statusId)}`, `status_category = ${param(stage.category)}`)
       }
+      // The owner after this change: as given, or cleared on a hand-over if the team works that way.
+      let nextOwner = row.assignee_id
       if (assigneeId !== undefined) {
         if (assigneeId !== null) {
           const users = await db.query('SELECT 1 FROM users WHERE id = $1', [assigneeId])
           if (users.length === 0) return reply.code(400).send({ error: 'unknown_assignee' })
         }
-        sets.push(`assignee_id = ${param(assigneeId)}`)
+        nextOwner = assigneeId
+      } else if (stageChanged) {
+        const teams = await db.query<{ hand_off_clears_owner: boolean }>(
+          'SELECT hand_off_clears_owner FROM teams WHERE id = $1',
+          [row.team_id],
+        )
+        if (teams[0]?.hand_off_clears_owner) nextOwner = null
       }
-      await db.query(`UPDATE work_items SET ${sets.join(', ')} WHERE id = ${param(row.id)}`, params)
+      if (nextOwner !== row.assignee_id) sets.push(`assignee_id = ${param(nextOwner)}`)
+
+      await db.transaction(async (tx) => {
+        await tx.query(
+          `UPDATE work_items SET ${sets.join(', ')} WHERE id = ${param(row.id)}`,
+          params,
+        )
+        if (stageChanged) {
+          await tx.query(
+            'UPDATE stage_history SET left_at = now() WHERE item_id = $1 AND left_at IS NULL',
+            [row.id],
+          )
+          await tx.query(
+            'INSERT INTO stage_history (item_id, stage_key, owner_id) VALUES ($1, $2, $3)',
+            [row.id, statusId, nextOwner],
+          )
+        } else if (nextOwner !== row.assignee_id) {
+          await tx.query(
+            'UPDATE stage_history SET owner_id = $2 WHERE item_id = $1 AND left_at IS NULL',
+            [row.id, nextOwner],
+          )
+        }
+      })
       const updated = await loadVisibleItem(principal, row.id)
       return { item: updated ? toWorkItem(updated) : null }
     },
