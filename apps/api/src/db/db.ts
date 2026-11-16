@@ -8,8 +8,12 @@ import { PGlite } from '@electric-sql/pglite'
 export interface Db {
   query<T = Record<string, unknown>>(sql: string, params?: readonly unknown[]): Promise<T[]>
   exec(sql: string): Promise<void>
+  /** Runs `fn` in one transaction: everything in it is saved together, or nothing is. */
+  transaction<T>(fn: (tx: Queryable) => Promise<T>): Promise<T>
   close(): Promise<void>
 }
+
+export type Queryable = Pick<Db, 'query'>
 
 /** `dataDir` undefined means in-memory (tests). A path keeps data between runs (local dev). */
 export async function createPgliteDb(dataDir?: string): Promise<Db> {
@@ -22,6 +26,15 @@ export async function createPgliteDb(dataDir?: string): Promise<Db> {
     },
     async exec(sql: string): Promise<void> {
       await pg.exec(sql)
+    },
+    async transaction<T>(fn: (tx: Queryable) => Promise<T>): Promise<T> {
+      return pg.transaction(async (tx) =>
+        fn({
+          async query<R>(sql: string, params: readonly unknown[] = []): Promise<R[]> {
+            return (await tx.query<R>(sql, [...params])).rows
+          },
+        }),
+      )
     },
     async close(): Promise<void> {
       await pg.close()

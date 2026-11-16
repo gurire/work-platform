@@ -19,6 +19,19 @@ export type WorkItemKind = (typeof WORK_ITEM_KINDS)[number]
 
 export type StatusCategory = 'todo' | 'in_progress' | 'done' | 'cancelled'
 
+/**
+ * A stage is one step in a team's workflow. An item's `statusId` is the key of its current
+ * stage within its team. See docs/adr/0007-stages-reviews-records.md.
+ */
+export interface Stage {
+  readonly teamId: string
+  /** Unique within the team, e.g. "validation". */
+  readonly key: string
+  readonly name: string
+  readonly category: StatusCategory
+  readonly position: number
+}
+
 export interface WorkItemRef {
   readonly id: string
   /** Human-readable key, e.g. ENG-142 or IT-88. */

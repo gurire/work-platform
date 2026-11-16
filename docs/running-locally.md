@@ -28,9 +28,15 @@ you act as. The API refuses to start in production mode while this is the case.
 
 Security is a private team: only Ben Ortiz and the org admin can see `SEC-1`.
 
+Data Pipeline (`DATA-…` items) is a pipeline team with its own stages, from Analysis to
+Published. Moving one of its items to another stage clears the owner, so the next stage picks
+it up. Grace Lim is its team admin; Chen Wei and Dara Singh are members.
+
+If you ran the app before stages were added, delete `apps/api/.data` once to get this team.
+
 ## Keys
 
-`J`/`K` or arrows move; `S` status, `A` assignee, `P` priority; `Ctrl K` every command, or an
+`J`/`K` or arrows move; `S` stage, `A` owner, `P` priority; `Ctrl K` every command, or an
 item key such as `ENG-42`; `/` filter; `D` density; `T` theme; `Ctrl Z` undo.
 
 Edits show immediately. If the server refuses one (for example, changing an item in a team you

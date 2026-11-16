@@ -5,11 +5,19 @@ import { ItemStore, type ItemPatch } from '../src/items/store'
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe('ItemStore', () => {
-  let save: ReturnType<typeof vi.fn<(item: WorkItem, patch: ItemPatch) => Promise<void>>>
+  let save: ReturnType<
+    typeof vi.fn<(item: WorkItem, patch: ItemPatch) => Promise<WorkItem | null | void>>
+  >
   let store: ItemStore
   beforeEach(() => {
-    save = vi.fn<(item: WorkItem, patch: ItemPatch) => Promise<void>>().mockResolvedValue()
+    save = vi
+      .fn<(item: WorkItem, patch: ItemPatch) => Promise<WorkItem | null | void>>()
+      .mockResolvedValue(undefined)
     store = new ItemStore(save)
+    store.setStages([
+      { teamId: 'ENG', key: 'done', name: 'Done', category: 'done', position: 5 },
+      { teamId: 'ENG', key: 'todo', name: 'Todo', category: 'todo', position: 2 },
+    ])
     store.append(generateSampleWorkItems(1000))
   })
 
@@ -67,6 +75,19 @@ describe('ItemStore', () => {
     expect(store.idForKey('ENG-1')).toBe('item-1')
     store.reset()
     expect(store.getView().total).toBe(0)
+  })
+
+  it('takes the server version after a save, such as an owner cleared on hand-over', async () => {
+    const before = store.getItem('item-1') as WorkItem
+    save.mockResolvedValueOnce({
+      ...before,
+      statusId: 'done',
+      statusCategory: 'done',
+      assigneeId: null,
+    })
+    store.mutate('item-1', { statusId: 'done' })
+    await flush()
+    expect(store.getItem('item-1')?.assigneeId).toBeNull()
   })
 
   it('appends pages without duplicating items', () => {

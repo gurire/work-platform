@@ -1,9 +1,17 @@
-import type { WorkItem } from '@wm/shared'
+import type { Stage, WorkItem } from '@wm/shared'
 import type { ItemPatch } from './store'
 
 export interface ApiUser {
   readonly id: string
   readonly name: string
+}
+
+export interface ApiTeam {
+  readonly id: string
+  readonly name: string
+  readonly isPrivate: boolean
+  readonly handOffClearsOwner: boolean
+  readonly stages: readonly Stage[]
 }
 
 export interface Me extends ApiUser {
@@ -42,15 +50,18 @@ export function createApi(getUser: () => string) {
   return {
     me: () => request<Me>('/me'),
     users: () => request<{ users: ApiUser[] }>('/users').then((body) => body.users),
+    teams: () => request<{ teams: ApiTeam[] }>('/teams').then((body) => body.teams),
     itemsPage: (after: string | null, limit = 200) =>
       request<{ items: WorkItem[]; nextAfter: string | null }>(
         `/items?limit=${limit}${after ? `&after=${after}` : ''}`,
       ),
-    saveItem: async (item: WorkItem, patch: ItemPatch): Promise<void> => {
-      await request(`/items/${encodeURIComponent(item.id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify(patch),
-      })
+    /** Sends one change and returns the item as the server now has it. */
+    saveItem: async (item: WorkItem, patch: ItemPatch): Promise<WorkItem | null> => {
+      const body = await request<{ item: WorkItem | null }>(
+        `/items/${encodeURIComponent(item.id)}`,
+        { method: 'PATCH', body: JSON.stringify(patch) },
+      )
+      return body.item
     },
   }
 }
