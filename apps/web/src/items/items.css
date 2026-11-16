@@ -514,3 +514,56 @@ kbd {
 .details-pair {
   display: contents;
 }
+
+/* --- reviews --------------------------------------------------------------------------- */
+.reviewer-pick {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+}
+.round {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.round-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 13px;
+}
+.reviewer-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+.reviewer-list li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 0;
+}
+.verdict {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+.verdict-approved {
+  color: var(--good);
+}
+.verdict-changes_requested {
+  color: var(--bad);
+}
+.round-past {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.round-past summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}

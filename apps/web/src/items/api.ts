@@ -1,4 +1,4 @@
-import type { Stage, StageTransition, WorkItem } from '@wm/shared'
+import type { RoundState, Stage, StageTransition, Verdict, WorkItem } from '@wm/shared'
 import type { HistoryEntry } from './item-model'
 import type { ItemPatch } from './store'
 
@@ -14,6 +14,7 @@ export interface ApiTeam {
   readonly handOffClearsOwner: boolean
   readonly stages: readonly Stage[]
   readonly transitions: readonly StageTransition[]
+  readonly reviewStages: readonly { stageKey: string; sendBackTo: string }[]
 }
 
 export interface WorkflowStep {
@@ -28,9 +29,42 @@ export interface Workflow {
   readonly stageKey: string
   readonly steps: readonly WorkflowStep[]
   readonly requiredFields: readonly { key: string; label: string; filled: boolean }[]
+  readonly review: { sendBackTo: string; approved: boolean } | null
   readonly missing: readonly string[]
   readonly allowedMoves: readonly string[]
   readonly canForce: boolean
+}
+
+export interface ReviewRound {
+  readonly id: string
+  readonly number: number
+  readonly stageKey: string
+  readonly requestedBy: string
+  readonly openedAt: string
+  readonly state: RoundState
+  readonly closedAt: string | null
+  readonly closedBy: string | null
+  readonly reviewers: readonly {
+    userId: string
+    verdict: Verdict | null
+    comment: string | null
+    at: string | null
+  }[]
+  readonly history: readonly {
+    userId: string
+    verdict: Verdict
+    comment: string | null
+    at: string
+  }[]
+}
+
+export interface Reviews {
+  readonly reviewStage: { stageKey: string; sendBackTo: string } | null
+  readonly approved: boolean
+  readonly canOpen: boolean
+  readonly canVerdict: boolean
+  readonly canWithdraw: boolean
+  readonly rounds: readonly ReviewRound[]
 }
 
 export interface Me extends ApiUser {
@@ -48,6 +82,24 @@ const REASONS: Record<number, string> = {
 /** Turns a refusal into a sentence a person can act on. */
 function explain(status: number, body: { error?: string; missing?: string[] }): string {
   switch (body.error) {
+    case 'self_review':
+      return 'nobody can review their own work: not whoever asks for the review, nor the stage owner'
+    case 'not_a_reviewer':
+      return 'one of those people cannot review items in this team'
+    case 'round_open':
+      return 'a review round is already open for this item'
+    case 'round_closed':
+      return 'that review round has already closed'
+    case 'comment_required':
+      return 'say what needs to change'
+    case 'not_review_stage':
+      return 'this stage does not take reviews'
+    case 'not_reviewer':
+      return 'you are not a reviewer in this round'
+    case 'already_approved':
+      return 'this stage has already been approved'
+    case 'send_back_invalid':
+      return 'the stage to send items back to is not set up correctly; ask a team admin'
     case 'requirements_unmet':
       return `this stage still needs: ${(body.missing ?? []).join(', ')}`
     case 'not_allowed':
@@ -120,6 +172,22 @@ export function createApi(getUser: () => string) {
       })
       return body.item
     },
+    reviews: (id: string) => request<Reviews>(`/items/${encodeURIComponent(id)}/reviews`),
+    openReview: (id: string, reviewers: readonly string[]) =>
+      request<Reviews>(`/items/${encodeURIComponent(id)}/reviews`, {
+        method: 'POST',
+        body: JSON.stringify({ reviewers }),
+      }),
+    giveVerdict: (roundId: string, verdict: Verdict, comment: string) =>
+      request<Reviews>(`/reviews/${encodeURIComponent(roundId)}/verdict`, {
+        method: 'POST',
+        body: JSON.stringify(comment.trim() ? { verdict, comment } : { verdict }),
+      }),
+    withdrawReview: (roundId: string) =>
+      request<Reviews>(`/reviews/${encodeURIComponent(roundId)}/withdraw`, {
+        method: 'POST',
+        body: '{}',
+      }),
     /** Sends one change and returns the item as the server now has it. */
     saveItem: async (item: WorkItem, patch: ItemPatch): Promise<WorkItem | null> => {
       const body = await request<{ item: WorkItem | null }>(

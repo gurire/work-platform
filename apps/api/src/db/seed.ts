@@ -88,7 +88,12 @@ export async function seedDevData(db: Db, itemCount = 2000, pipelineCount = 300)
   await db.exec(`INSERT INTO stage_required_fields (team_id, stage_key, field_key, label) VALUES
     ('DATA', 'validation', 'coverage', 'Coverage')`)
   await db.exec(`INSERT INTO team_members (team_id, user_id, role) VALUES
-    ('DATA', 'user-7', 'admin'), ('DATA', 'user-3', 'member'), ('DATA', 'user-4', 'member')`)
+    ('DATA', 'user-7', 'admin'), ('DATA', 'user-3', 'member'), ('DATA', 'user-4', 'member'),
+    ('DATA', 'user-9', 'reviewer')`)
+  // Validation is also a review stage: changes requested send the item back to Processing.
+  await db.exec(
+    "UPDATE stages SET review_send_back_to = 'processing' WHERE team_id = 'DATA' AND key = 'validation'",
+  )
 
   const items = generateSampleWorkItems(itemCount)
   await db.exec('BEGIN')

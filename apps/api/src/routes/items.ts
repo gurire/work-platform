@@ -4,6 +4,7 @@ import {
   checkMove,
   decide,
   isFilled,
+  REVIEW_REQUIREMENT,
   type PermissionAction,
   type PermissionTarget,
   type UserPrincipal,
@@ -14,7 +15,7 @@ import {
 import type { Db, Queryable } from '../db/db.js'
 import { resolvePrincipal } from '../principal.js'
 
-interface ItemRow {
+export interface ItemRow {
   seq: string
   id: string
   key: string
@@ -33,13 +34,13 @@ interface ItemRow {
   is_private: boolean
 }
 
-const ITEM_COLUMNS = `w.seq, w.id, w.key, w.kind, w.title, w.status_id, w.status_category,
+export const ITEM_COLUMNS = `w.seq, w.id, w.key, w.kind, w.title, w.status_id, w.status_category,
   w.team_id, w.parent_id, w.client_id, w.assignee_id, w.created_by, w.created_at, w.updated_at,
   w.fields, t.is_private`
 
-const iso = (value: Date | string): string => new Date(value).toISOString()
+export const iso = (value: Date | string): string => new Date(value).toISOString()
 
-function toWorkItem(row: ItemRow): WorkItem {
+export function toWorkItem(row: ItemRow): WorkItem {
   return {
     id: row.id,
     key: row.key,
@@ -57,14 +58,14 @@ function toWorkItem(row: ItemRow): WorkItem {
   }
 }
 
-function targetOf(row: ItemRow): PermissionTarget {
+export function targetOf(row: ItemRow): PermissionTarget {
   return {
     team: { id: row.team_id, isPrivate: row.is_private },
     ...(row.created_by ? { createdBy: row.created_by } : {}),
   }
 }
 
-async function audit(
+export async function audit(
   db: Db,
   actor: UserPrincipal,
   action: string,
@@ -93,12 +94,14 @@ interface WorkflowState {
   passSeq: string | null
   steps: StepState[]
   requiredFields: { key: string; label: string; filled: boolean }[]
-  /** Labels of unmet requirements, steps first. */
+  /** Set when the current stage is a review stage (specs/reviews.md). */
+  review: { sendBackTo: string; approved: boolean } | null
+  /** Labels of unmet requirements: steps, then fields, then the review. */
   missing: string[]
 }
 
 /** The current stage's rules and how far this item has got with them. */
-async function loadWorkflow(
+export async function loadWorkflow(
   db: Queryable,
   row: Pick<ItemRow, 'id' | 'team_id' | 'status_id' | 'fields'>,
   fields: Record<string, unknown> = row.fields,
@@ -108,9 +111,11 @@ async function loadWorkflow(
     name: string
     category: Stage['category']
     position: number
-  }>('SELECT key, name, category, position FROM stages WHERE team_id = $1 ORDER BY position', [
-    row.team_id,
-  ])
+    review_send_back_to: string | null
+  }>(
+    'SELECT key, name, category, position, review_send_back_to FROM stages WHERE team_id = $1 ORDER BY position',
+    [row.team_id],
+  )
   const transitions = await db.query<{ from_key: string; to_key: string }>(
     'SELECT from_key, to_key FROM stage_transitions WHERE team_id = $1',
     [row.team_id],
@@ -151,17 +156,58 @@ async function loadWorkflow(
     label: field.label,
     filled: isFilled(fields[field.field_key]),
   }))
+  // A review stage needs an approved round in this pass (specs/reviews.md, rules 1 and 7).
+  const sendBackTo = stageRows.find((s) => s.key === row.status_id)?.review_send_back_to ?? null
+  let review: WorkflowState['review'] = null
+  if (sendBackTo !== null) {
+    const approved =
+      passSeq !== null &&
+      (
+        await db.query(
+          "SELECT 1 FROM review_rounds WHERE item_id = $1 AND history_seq = $2 AND state = 'approved'",
+          [row.id, passSeq],
+        )
+      ).length > 0
+    review = { sendBackTo, approved }
+  }
   return {
-    stages: stageRows.map((stage) => ({ teamId: row.team_id, ...stage })),
+    stages: stageRows.map((stage) => ({
+      teamId: row.team_id,
+      key: stage.key,
+      name: stage.name,
+      category: stage.category,
+      position: stage.position,
+    })),
     transitions: transitions.map((t) => ({ from: t.from_key, to: t.to_key })),
     passSeq,
     steps: stepState,
     requiredFields: fieldState,
+    review,
     missing: [
       ...stepState.filter((step) => !step.ticked).map((step) => step.label),
       ...fieldState.filter((field) => !field.filled).map((field) => field.label),
+      ...(review && !review.approved ? [REVIEW_REQUIREMENT] : []),
     ],
   }
+}
+
+/** The item, if this person may see it. A hidden item looks exactly like a missing one. */
+export async function loadVisibleItemIn(
+  db: Db,
+  principal: UserPrincipal,
+  idOrKey: string,
+): Promise<ItemRow | null> {
+  const rows = await db.query<ItemRow>(
+    `SELECT ${ITEM_COLUMNS} FROM work_items w JOIN teams t ON t.id = w.team_id
+     WHERE (w.id = $1 OR w.key = $1) AND w.deleted_at IS NULL`,
+    [idOrKey],
+  )
+  const row = rows[0]
+  if (!row) return null
+  const decision = decide(principal, 'item.view', targetOf(row))
+  if (!decision.allowed) return null
+  if (decision.audit) await audit(db, principal, 'item.view', row.team_id, row.id)
+  return row
 }
 
 export interface ItemRouteOptions {
@@ -217,7 +263,10 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       name: string
       category: Stage['category']
       position: number
-    }>('SELECT team_id, key, name, category, position FROM stages ORDER BY team_id, position')
+      review_send_back_to: string | null
+    }>(
+      'SELECT team_id, key, name, category, position, review_send_back_to FROM stages ORDER BY team_id, position',
+    )
     const transitions = await db.query<{ team_id: string; from_key: string; to_key: string }>(
       'SELECT team_id, from_key, to_key FROM stage_transitions',
     )
@@ -239,6 +288,9 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
         transitions: transitions
           .filter((t) => t.team_id === team.id)
           .map((t): StageTransition => ({ from: t.from_key, to: t.to_key })),
+        reviewStages: stages
+          .filter((stage) => stage.team_id === team.id && stage.review_send_back_to !== null)
+          .map((stage) => ({ stageKey: stage.key, sendBackTo: stage.review_send_back_to })),
       })),
     }
   })
@@ -255,7 +307,7 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       entered_at: Date | string
       left_at: Date | string | null
       moved_by: string | null
-      kind: 'move' | 'forced' | 'reopen'
+      kind: 'move' | 'forced' | 'reopen' | 'sent_back'
       reason: string | null
     }>(
       'SELECT stage_key, owner_id, entered_at, left_at, moved_by, kind, reason FROM stage_history WHERE item_id = $1 ORDER BY seq',
@@ -330,6 +382,7 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       stageKey: row.status_id,
       steps: state.steps,
       requiredFields: state.requiredFields,
+      review: state.review,
       missing: state.missing,
       allowedMoves: allowedDestinations(state.stages, row.status_id, state.transitions),
       canForce: decide(principal, 'item.forceMove', targetOf(row)).allowed,
@@ -395,22 +448,8 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
     },
   )
 
-  async function loadVisibleItem(
-    principal: UserPrincipal,
-    idOrKey: string,
-  ): Promise<ItemRow | null> {
-    const rows = await db.query<ItemRow>(
-      `SELECT ${ITEM_COLUMNS} FROM work_items w JOIN teams t ON t.id = w.team_id
-       WHERE (w.id = $1 OR w.key = $1) AND w.deleted_at IS NULL`,
-      [idOrKey],
-    )
-    const row = rows[0]
-    if (!row) return null
-    const decision = decide(principal, 'item.view', targetOf(row))
-    if (!decision.allowed) return null
-    if (decision.audit) await audit(db, principal, 'item.view', row.team_id, row.id)
-    return row
-  }
+  const loadVisibleItem = (principal: UserPrincipal, idOrKey: string) =>
+    loadVisibleItemIn(db, principal, idOrKey)
 
   /** A hidden item looks exactly like a missing one: 404, never 403. */
   app.get<{ Params: { id: string } }>('/items/:id', async (request, reply) => {
@@ -561,6 +600,12 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
           await tx.query(
             'INSERT INTO stage_history (item_id, stage_key, owner_id, moved_by, kind, reason) VALUES ($1, $2, $3, $4, $5, $6)',
             [row.id, statusId, nextOwner, principal.id, moveKind, moveReason],
+          )
+          // Leaving the stage closes an open review round (specs/reviews.md, rule 8).
+          await tx.query(
+            `UPDATE review_rounds SET state = 'withdrawn', closed_at = now(), closed_by = $2
+             WHERE item_id = $1 AND state = 'open'`,
+            [row.id, principal.id],
           )
           if (moveKind === 'forced') {
             await tx.query(

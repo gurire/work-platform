@@ -154,6 +154,51 @@ const MIGRATIONS: readonly { id: string; sql: string }[] = [
       CREATE INDEX step_events_pass ON step_events (history_seq, step_id, seq);
     `,
   },
+  {
+    // Review rounds (specs/reviews.md). Expand only: wider checks, new nullable column, new tables.
+    id: '0004_reviews',
+    sql: `
+      ALTER TABLE team_members DROP CONSTRAINT team_members_role_check;
+      ALTER TABLE team_members ADD CONSTRAINT team_members_role_check
+        CHECK (role IN ('admin', 'member', 'reviewer'));
+      ALTER TABLE stage_history DROP CONSTRAINT stage_history_kind_check;
+      ALTER TABLE stage_history ADD CONSTRAINT stage_history_kind_check
+        CHECK (kind IN ('move', 'forced', 'reopen', 'sent_back'));
+      -- A stage with a send-back stage is a review stage.
+      ALTER TABLE stages ADD COLUMN review_send_back_to text;
+      CREATE TABLE review_rounds (
+        id            bigserial PRIMARY KEY,
+        item_id       text NOT NULL REFERENCES work_items (id),
+        number        integer NOT NULL,
+        history_seq   bigint NOT NULL REFERENCES stage_history (seq),
+        stage_key     text NOT NULL,
+        requested_by  text NOT NULL REFERENCES users (id),
+        opened_at     timestamptz NOT NULL DEFAULT now(),
+        state         text NOT NULL DEFAULT 'open'
+          CHECK (state IN ('open', 'approved', 'changes_requested', 'withdrawn')),
+        closed_at     timestamptz,
+        closed_by     text REFERENCES users (id),
+        UNIQUE (item_id, number)
+      );
+      -- At most one open round per item (rule 2).
+      CREATE UNIQUE INDEX review_rounds_one_open ON review_rounds (item_id) WHERE state = 'open';
+      CREATE TABLE review_reviewers (
+        round_id  bigint NOT NULL REFERENCES review_rounds (id),
+        user_id   text NOT NULL REFERENCES users (id),
+        PRIMARY KEY (round_id, user_id)
+      );
+      -- Append-only (rule 10): the latest verdict per reviewer is the one that counts.
+      CREATE TABLE review_verdicts (
+        seq       bigserial PRIMARY KEY,
+        round_id  bigint NOT NULL REFERENCES review_rounds (id),
+        user_id   text NOT NULL REFERENCES users (id),
+        verdict   text NOT NULL CHECK (verdict IN ('approved', 'changes_requested')),
+        comment   text,
+        at        timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX review_verdicts_round ON review_verdicts (round_id, seq);
+    `,
+  },
 ]
 
 export async function migrate(db: Db): Promise<string[]> {

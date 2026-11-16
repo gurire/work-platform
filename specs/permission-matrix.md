@@ -33,6 +33,7 @@ must not change it without the owner's say-so. It drives the protected permissio
 | Org admin        | Runs the platform                                 | Everything, including configuration and audit          |
 | Team admin       | Leads a team                                      | Their teams' items and team configuration              |
 | Member           | Internal employee on one or more teams            | Views all open teams; changes items in their own teams |
+| Reviewer         | Team role: checks work but does not do it         | As member to view; comments and verdicts in own teams  |
 | Viewer           | Internal, read-only (for example a stakeholder)   | Views what a member can view; no changes               |
 | Client guest     | External person from one client                   | Only items shared with that client                     |
 | Portal requester | Anyone who raises a service desk request (later)  | Only their own requests                                |
@@ -92,6 +93,9 @@ An agent's delete is always a soft delete, restored only by a person.
 | Work item: tick or untick a stage step           |     Y     |     Team      |         Team         |   N    |    By scope     |
 | Work item: force a move (audited)                |     Y     |     Team      |          N           |   N    |        N        |
 | Work item: reopen from an end stage              |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Review: open a round                             |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Review: give or change a verdict                 |     Y     |     Team      |         Team         |   N    |        N        |
+| Review: withdraw a round                         |     Y     |     Team      |         Own          |   N    |        N        |
 | Work item: delete permanently                    |     Y     |       N       |          N           |   N    |        N        |
 | Comment: add                                     |     Y     |     Team      |         Team         |   N    |    By scope     |
 | Comment: edit or delete own                      |     Y     |     Team      |         Team         |   N    |    By scope     |
@@ -112,6 +116,11 @@ Org admins can view private teams; each such view is written to the audit log.
 The stage step, forced move, reopen and stage rule rows were added on 16 Nov 2026, approved
 with `specs/workflow.md` (section 4). For deleting and restoring, "Own" means the person who
 created the item; the current stage owner does not count.
+
+The review rows and the **Reviewer** team role were added on 17 Nov 2026 from `specs/reviews.md`
+(section 4), which has the full table including the Reviewer and Client guest columns. A
+reviewer may view, comment and give verdicts in their teams, and nothing else. For withdrawing
+a round, "Own" means the person who opened it.
 
 ## 6. Decisions (answered by the owner, 16 Nov 2026)
 

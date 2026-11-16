@@ -73,3 +73,17 @@ list, `Esc` back to the list.
 To try the rules, open a DATA item in Validation as Chen Wei (the default sign-in, a DATA
 member): the forward move is held back until the steps are ticked and Coverage is filled in.
 Then act as Grace Lim (DATA team admin) to see **Force to …**.
+
+## Reviews
+
+DATA's Validation stage is also a review stage. Before an item can move on, it needs an
+approved review round as well as the ticked steps and Coverage.
+
+1. As Chen Wei, open a DATA item in Validation and press **Ask for review**. Pick Ines Costa
+   (a DATA reviewer) and anyone else; everyone picked must approve. You cannot pick yourself or
+   the item's owner.
+2. Act as Ines Costa and open the same item. **Approve**, or write a comment and press
+   **Request changes**. Asking for changes ends the round and sends the item back to
+   Processing, with the comment shown in the stage history.
+3. Once every reviewer approves, "Review approved" is ticked off; someone still moves the item
+   on. If it comes back to Validation later, it needs a new round.
