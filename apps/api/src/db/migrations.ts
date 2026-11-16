@@ -236,6 +236,15 @@ const MIGRATIONS: readonly { id: string; sql: string }[] = [
       CREATE INDEX work_items_record ON work_items (record_id) WHERE record_id IS NOT NULL;
     `,
   },
+  {
+    // Stage limits and waiting targets (specs/stage-limits.md). Expand only: nullable columns.
+    id: '0006_stage_limits',
+    sql: `
+      ALTER TABLE stages ADD COLUMN item_limit integer CHECK (item_limit BETWEEN 1 AND 999);
+      ALTER TABLE stages ADD COLUMN target_hours integer CHECK (target_hours BETWEEN 1 AND 8760);
+      CREATE INDEX stage_history_open ON stage_history (item_id) WHERE left_at IS NULL;
+    `,
+  },
 ]
 
 export async function migrate(db: Db): Promise<string[]> {

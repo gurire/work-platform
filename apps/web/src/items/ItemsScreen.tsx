@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { allowedDestinations, SAMPLE_PRIORITIES } from '@wm/shared'
 import { createApi, type ApiTeam, type ApiUser, type Me } from './api'
 import { CommandPalette, type Command } from './CommandPalette'
-import { itemHash, parseRoute, recordHash, type Route } from './item-model'
+import { boardHash, itemHash, parseRoute, recordHash, type Route } from './item-model'
+import { Board } from './Board'
 import { ItemPage } from './ItemPage'
 import { RecordPage } from './RecordPage'
 import { ItemList, type Density } from './ItemList'
@@ -151,6 +152,9 @@ export function ItemsScreen() {
     window.history.pushState(null, '', window.location.pathname + window.location.search)
     setRoute({ page: 'list' })
   }, [])
+  const openBoard = useCallback((teamId: string) => {
+    window.location.hash = boardHash(teamId)
+  }, [])
   const openRecord = useCallback((id: string) => {
     window.location.hash = recordHash(id)
   }, [])
@@ -250,6 +254,12 @@ export function ItemsScreen() {
         shortcut: '/',
         run: () => filterRef.current?.focus(),
       },
+      ...teams.map((t) => ({
+        id: `board-${t.id}`,
+        group: 'Open board',
+        label: t.name,
+        run: () => openBoard(t.id),
+      })),
       ...users.map((u) => ({
         id: `signin-${u.id}`,
         group: 'Dev sign-in',
@@ -257,7 +267,7 @@ export function ItemsScreen() {
         run: () => setUserId(u.id),
       })),
     ]
-  }, [palette, edit, toggleTheme, cycleDensity, users, currentTeam, currentItem])
+  }, [palette, edit, toggleTheme, cycleDensity, users, currentTeam, currentItem, teams, openBoard])
 
   const dynamicCommands = useCallback(
     (query: string): Command[] => {
@@ -289,6 +299,15 @@ export function ItemsScreen() {
         return
       }
       if (mod || event.altKey) return
+      if (route.page === 'board') {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          backToList()
+        } else if (event.key === 't') {
+          toggleTheme()
+        }
+        return
+      }
       if (route.page === 'record') {
         if (event.key === 'Escape') {
           event.preventDefault()
@@ -331,6 +350,10 @@ export function ItemsScreen() {
         p: () => setPalette('priority'),
         d: cycleDensity,
         t: toggleTheme,
+        b: () => {
+          const teamId = currentTeam?.id ?? teams[0]?.id
+          if (teamId) openBoard(teamId)
+        },
         '/': () => filterRef.current?.focus(),
       }
       const action = actions[event.key]
@@ -352,6 +375,9 @@ export function ItemsScreen() {
     openItem,
     currentId,
     backFromRecord,
+    currentTeam,
+    teams,
+    openBoard,
   ])
 
   const onSelect = useCallback((index: number) => setCursor(index), [])
@@ -409,6 +435,22 @@ export function ItemsScreen() {
             }}
           />
         )}
+        {route.page !== 'board' && (
+          <button
+            className="button"
+            onClick={() => {
+              const teamId = currentTeam?.id ?? teams[0]?.id
+              if (teamId) openBoard(teamId)
+            }}
+          >
+            Board <kbd>B</kbd>
+          </button>
+        )}
+        {route.page !== 'list' && (
+          <button className="button" onClick={backToList}>
+            List
+          </button>
+        )}
         <button className="button" onClick={() => setPalette('all')}>
           Commands <kbd>Ctrl K</kbd>
         </button>
@@ -425,6 +467,18 @@ export function ItemsScreen() {
           positionLabel={routeIndex >= 0 ? `Item ${routeIndex + 1} of ${ids.length}` : null}
           onBack={backToList}
           onOpenRecord={openRecord}
+        />
+      ) : route.page === 'board' ? (
+        <Board
+          key={route.teamId}
+          api={api}
+          store={store}
+          teamId={route.teamId}
+          teams={teams}
+          users={users}
+          me={me}
+          onOpenItem={openItem}
+          onTeamChange={openBoard}
         />
       ) : route.page === 'record' ? (
         <RecordPage
@@ -482,8 +536,8 @@ export function ItemsScreen() {
               </span>
             ))}
             <span className="muted">
-              J/K move · Enter open · S stage · A owner · P priority · D density · T theme · Ctrl Z
-              undo
+              J/K move · Enter open · B board · S stage · A owner · P priority · D density · T theme
+              · Ctrl Z undo
             </span>
           </footer>
         </>

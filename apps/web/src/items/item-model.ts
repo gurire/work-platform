@@ -67,6 +67,7 @@ export type Route =
   | { readonly page: 'list' }
   | { readonly page: 'item'; readonly key: string }
   | { readonly page: 'record'; readonly id: string }
+  | { readonly page: 'board'; readonly teamId: string }
 
 /** `#/item/ENG-42` opens an item, `#/record/<id>` a record; anything else is the list. */
 export function parseRoute(hash: string): Route {
@@ -74,6 +75,8 @@ export function parseRoute(hash: string): Route {
   if (item?.[1]) return { page: 'item', key: item[1] }
   const record = /^#\/record\/([A-Za-z0-9_-]{1,80})$/.exec(hash)
   if (record?.[1]) return { page: 'record', id: record[1] }
+  const board = /^#\/board\/([A-Za-z0-9_-]{1,64})$/.exec(hash)
+  if (board?.[1]) return { page: 'board', teamId: board[1] }
   return { page: 'list' }
 }
 
@@ -83,4 +86,15 @@ export function itemHash(key: string): string {
 
 export function recordHash(id: string): string {
   return `#/record/${encodeURIComponent(id)}`
+}
+
+export function boardHash(teamId: string): string {
+  return `#/board/${encodeURIComponent(teamId)}`
+}
+
+/** "3 h", "2 d": a short waiting time for a card. */
+export function shortDuration(hours: number): string {
+  if (hours < 1) return '<1 h'
+  if (hours < 48) return `${Math.floor(hours)} h`
+  return `${Math.floor(hours / 24)} d`
 }
