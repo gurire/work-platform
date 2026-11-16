@@ -32,6 +32,12 @@ Data Pipeline (`DATA-…` items) is a pipeline team with its own stages, from An
 Published. Moving one of its items to another stage clears the owner, so the next stage picks
 it up. Grace Lim is its team admin; Chen Wei and Dara Singh are members.
 
+Its Validation stage has rules: two checklist steps and a filled-in Coverage value are needed
+before an item can go on to Client review. The list screen does not have a checklist yet, so
+moving a `DATA-…` item forward out of Validation is refused with a message saying what is
+missing. Moving it back, or to Dropped, works. The item page with the checklist comes next.
+`S` only offers the stages an item is allowed to move to.
+
 If you ran the app before stages were added, delete `apps/api/.data` once to get this team.
 
 ## Keys

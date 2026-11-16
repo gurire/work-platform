@@ -6,7 +6,7 @@ import { seedDevData } from '../src/db/seed.js'
 describe('migrations and dev seed', () => {
   it('migrates once and seeds made-up data idempotently', async () => {
     const db = await createPgliteDb()
-    expect(await migrate(db)).toEqual(['0001_core', '0002_stages'])
+    expect(await migrate(db)).toEqual(['0001_core', '0002_stages', '0003_stage_rules'])
     expect(await migrate(db)).toEqual([])
     await seedDevData(db, 40, 10)
     await seedDevData(db, 40, 10)

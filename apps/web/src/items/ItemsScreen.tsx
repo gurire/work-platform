@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { SAMPLE_PRIORITIES } from '@wm/shared'
+import { allowedDestinations, SAMPLE_PRIORITIES } from '@wm/shared'
 import { createApi, type ApiTeam, type ApiUser, type Me } from './api'
 import { CommandPalette, type Command } from './CommandPalette'
 import { ItemList, type Density } from './ItemList'
@@ -140,13 +140,20 @@ export function ItemsScreen() {
   }, [])
   const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
   const commands = useMemo<Command[]>(() => {
-    // Only the stages of the selected item's own team are offered.
-    const status = (currentTeam?.stages ?? []).map((s) => ({
-      id: `status-${s.key}`,
-      group: 'Move to stage',
-      label: s.name,
-      run: () => edit('Change stage', { statusId: s.key }),
-    }))
+    // Only the stages the selected item may move to are offered (specs/workflow.md).
+    const reachable = new Set(
+      currentTeam && currentItem
+        ? allowedDestinations(currentTeam.stages, currentItem.statusId, currentTeam.transitions)
+        : [],
+    )
+    const status = (currentTeam?.stages ?? [])
+      .filter((s) => reachable.has(s.key))
+      .map((s) => ({
+        id: `status-${s.key}`,
+        group: 'Move to stage',
+        label: s.name,
+        run: () => edit('Change stage', { statusId: s.key }),
+      }))
     const assignee = [
       {
         id: 'assign-none',
@@ -209,7 +216,7 @@ export function ItemsScreen() {
         run: () => setUserId(u.id),
       })),
     ]
-  }, [palette, edit, toggleTheme, cycleDensity, users, currentTeam])
+  }, [palette, edit, toggleTheme, cycleDensity, users, currentTeam, currentItem])
 
   const dynamicCommands = useCallback(
     (query: string): Command[] => {

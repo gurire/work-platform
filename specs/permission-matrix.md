@@ -89,6 +89,9 @@ An agent's delete is always a soft delete, restored only by a person.
 | Work item: move to another team                  |     Y     | Team (source) | Member of both teams |   N    |        N        |
 | Work item: delete (soft, 30 days)                |     Y     |     Team      |         Own          |   N    |     Granted     |
 | Work item: restore within 30 days                |     Y     |     Team      |         Own          |   N    |        N        |
+| Work item: tick or untick a stage step           |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Work item: force a move (audited)                |     Y     |     Team      |          N           |   N    |        N        |
+| Work item: reopen from an end stage              |     Y     |     Team      |         Team         |   N    |    By scope     |
 | Work item: delete permanently                    |     Y     |       N       |          N           |   N    |        N        |
 | Comment: add                                     |     Y     |     Team      |         Team         |   N    |    By scope     |
 | Comment: edit or delete own                      |     Y     |     Team      |         Team         |   N    |    By scope     |
@@ -97,6 +100,7 @@ An agent's delete is always a soft delete, restored only by a person.
 | Attachment: delete                               |     Y     |     Team      |         Own          |   N    |        N        |
 | Saved view: create and share                     |     Y     |     Team      |         Team         |  Own   |        N        |
 | Team configuration: edit workflows and fields    |     Y     |     Team      |          N           |   N    |     Granted     |
+| Team configuration: edit stage rules             |     Y     |     Team      |          N           |   N    |     Granted     |
 | Team configuration: edit membership and privacy  |     Y     |     Team      |          N           |   N    |        N        |
 | Org configuration: edit (non-security)           |     Y     |       N       |          N           |   N    |     Granted     |
 | Org security: roles, SSO, API keys, agent scopes |     Y     |       N       |          N           |   N    |        N        |
@@ -104,6 +108,10 @@ An agent's delete is always a soft delete, restored only by a person.
 | Export items (always audited)                    |     Y     |     Open      |         Open         |   N    |    By scope     |
 
 Org admins can view private teams; each such view is written to the audit log.
+
+The stage step, forced move, reopen and stage rule rows were added on 16 Nov 2026, approved
+with `specs/workflow.md` (section 4). For deleting and restoring, "Own" means the person who
+created the item; the current stage owner does not count.
 
 ## 6. Decisions (answered by the owner, 16 Nov 2026)
 

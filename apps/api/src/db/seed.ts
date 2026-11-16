@@ -81,6 +81,12 @@ export async function seedDevData(db: Db, itemCount = 2000, pipelineCount = 300)
       [key, name, category, position + 1],
     )
   }
+  // Validation needs two checks and a coverage value before an item can go to client review.
+  await db.exec(`INSERT INTO stage_steps (team_id, stage_key, label, position) VALUES
+    ('DATA', 'validation', 'Totals checked against the source', 1),
+    ('DATA', 'validation', 'Units and column names confirmed', 2)`)
+  await db.exec(`INSERT INTO stage_required_fields (team_id, stage_key, field_key, label) VALUES
+    ('DATA', 'validation', 'coverage', 'Coverage')`)
   await db.exec(`INSERT INTO team_members (team_id, user_id, role) VALUES
     ('DATA', 'user-7', 'admin'), ('DATA', 'user-3', 'member'), ('DATA', 'user-4', 'member')`)
 
@@ -100,7 +106,10 @@ export async function seedDevData(db: Db, itemCount = 2000, pipelineCount = 300)
       teamId: 'DATA',
       assigneeId: owner,
       createdBy: 'user-7',
-      fields: { priority: i % 5 },
+      fields:
+        i % 2 === 0
+          ? { priority: i % 5, coverage: `${2015 + (i % 10)} to 2025` }
+          : { priority: i % 5 },
     })
   }
   for (const item of items) {
