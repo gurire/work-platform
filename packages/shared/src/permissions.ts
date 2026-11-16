@@ -174,7 +174,7 @@ function decideForUser(
     case 'attachment.delete':
       return isTeamAdmin || (inTeam && isCreator) ? ALLOW : DENY
     case 'comment.editOwn':
-      return visible && isCreator ? ALLOW : DENY
+      return inTeam && isCreator ? ALLOW : DENY
     case 'comment.deleteAny':
     case 'team.config.edit':
       return isTeamAdmin ? ALLOW : DENY
@@ -198,8 +198,12 @@ function decideForAgent(
 
   // The agent's own comments are the ones it authored; everything else is capped by the owner.
   if (action === 'comment.editOwn') {
-    const ownerCanSee = decideForUser(agent.owner, 'item.view', target).allowed
-    return ownerCanSee && target.createdBy === agent.id ? ALLOW_AUDITED : DENY
+    const team = target.team
+    const owner = agent.owner
+    const ownerInTeam =
+      owner.orgRole === 'org_admin' ||
+      (owner.orgRole === 'member' && team !== undefined && owner.teams[team.id] !== undefined)
+    return team !== undefined && ownerInTeam && target.createdBy === agent.id ? ALLOW_AUDITED : DENY
   }
   // Never beyond the owner's access. Agent actions are always audited (principle 7).
   return decideForUser(agent.owner, action, target).allowed ? ALLOW_AUDITED : DENY
