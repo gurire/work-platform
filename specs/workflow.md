@@ -42,7 +42,7 @@ owner merges it.** After that this file is human-owned and drives protected test
    Field values are not cleared.
 8. **Reopening.** Any team member may move an item out of an end stage. A short reason is
    required and shown on the item. The item goes to an allowed destination of that end stage;
-   by default that is the stage before it.
+   by default that is the nearest earlier stage that is not an end stage.
 9. **Agents and API keys follow the same rules** and can never force a move, whoever owns them.
 10. **Owner on hand-over** is unchanged from ADR 0007: a team may choose to clear the owner
     whenever an item changes stage.
@@ -53,24 +53,24 @@ A team has stages, in order: Analysis, Sourcing, Validation, Client review, Publ
 Dropped (cancelled). Validation requires two steps ("Totals checked", "Units confirmed") and
 the field "Coverage". No allowed moves have been listed, so the default applies.
 
-|  #  | Situation                                                                                  | Result                                                                                                |
-| :-: | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-|  1  | Item in Validation, one step unticked. Member moves it to Client review                    | Refused. Message names the unticked step                                                              |
-|  2  | Same item, both steps ticked, "Coverage" empty. Member moves it forward                    | Refused. Message names the empty field                                                                |
-|  3  | Everything met. Member moves it to Client review                                           | Allowed                                                                                               |
-|  4  | Item in Validation, nothing ticked. Member moves it back to Sourcing                       | Allowed. Requirements do not apply backwards                                                          |
-|  5  | Item in Validation, nothing ticked. Member moves it to Dropped                             | Allowed. Requirements do not apply to cancelled stages                                                |
-|  6  | Item in Analysis. Member moves it straight to Validation                                   | Refused. Not an allowed destination (not next or previous)                                            |
-|  7  | Item in Validation, one step unticked. Team admin forces it to Client review with a reason | Allowed, audited, reason shown on the item                                                            |
-|  8  | Same as 7, but no reason given                                                             | Refused                                                                                               |
-|  9  | Same as 7, but by a member who is not an admin                                             | Refused                                                                                               |
-| 10  | Same as 7, but by an agent owned by the team admin                                         | Refused                                                                                               |
-| 11  | Team admin forces an item from Analysis to Client review                                   | Refused. Forcing skips requirements, not allowed destinations                                         |
-| 12  | Item returns from Client review to Validation                                              | New pass: both steps unticked; "Coverage" keeps its value                                             |
-| 13  | Item in Published. Member reopens it with a reason                                         | Allowed. It moves to Client review; the reason is shown                                               |
-| 14  | Item in Published. Member reopens it with no reason                                        | Refused                                                                                               |
-| 15  | Item in Dropped. Member reopens it with a reason                                           | Allowed. It moves to Client review, the stage before Dropped in order, unless the team listed another |
-| 16  | A viewer ticks a step                                                                      | Refused. Viewers cannot change items                                                                  |
+|  #  | Situation                                                                                  | Result                                                                                 |
+| :-: | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+|  1  | Item in Validation, one step unticked. Member moves it to Client review                    | Refused. Message names the unticked step                                               |
+|  2  | Same item, both steps ticked, "Coverage" empty. Member moves it forward                    | Refused. Message names the empty field                                                 |
+|  3  | Everything met. Member moves it to Client review                                           | Allowed                                                                                |
+|  4  | Item in Validation, nothing ticked. Member moves it back to Sourcing                       | Allowed. Requirements do not apply backwards                                           |
+|  5  | Item in Validation, nothing ticked. Member moves it to Dropped                             | Allowed. Requirements do not apply to cancelled stages                                 |
+|  6  | Item in Analysis. Member moves it straight to Validation                                   | Refused. Not an allowed destination (not next or previous)                             |
+|  7  | Item in Validation, one step unticked. Team admin forces it to Client review with a reason | Allowed, audited, reason shown on the item                                             |
+|  8  | Same as 7, but no reason given                                                             | Refused                                                                                |
+|  9  | Same as 7, but by a member who is not an admin                                             | Refused                                                                                |
+| 10  | Same as 7, but by an agent owned by the team admin                                         | Refused                                                                                |
+| 11  | Team admin forces an item from Analysis to Client review                                   | Refused. Forcing skips requirements, not allowed destinations                          |
+| 12  | Item returns from Client review to Validation                                              | New pass: both steps unticked; "Coverage" keeps its value                              |
+| 13  | Item in Published. Member reopens it with a reason                                         | Allowed. It moves to Client review; the reason is shown                                |
+| 14  | Item in Published. Member reopens it with no reason                                        | Refused                                                                                |
+| 15  | Item in Dropped. Member reopens it with a reason                                           | Allowed. It moves to Client review, the nearest earlier stage that is not an end stage |
+| 16  | A viewer ticks a step                                                                      | Refused. Viewers cannot change items                                                   |
 
 ## 4. Additions to the permission matrix
 
