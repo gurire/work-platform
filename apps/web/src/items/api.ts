@@ -1,4 +1,4 @@
-import type { Stage, WorkItem } from '@wm/shared'
+import type { Stage, StageTransition, WorkItem } from '@wm/shared'
 import type { ItemPatch } from './store'
 
 export interface ApiUser {
@@ -12,6 +12,7 @@ export interface ApiTeam {
   readonly isPrivate: boolean
   readonly handOffClearsOwner: boolean
   readonly stages: readonly Stage[]
+  readonly transitions: readonly StageTransition[]
 }
 
 export interface Me extends ApiUser {
@@ -24,6 +25,22 @@ const REASONS: Record<number, string> = {
   401: 'you are not signed in',
   403: 'you can only change items in your own teams',
   404: 'that item is no longer available to you',
+}
+
+/** Turns a refusal into a sentence a person can act on. */
+function explain(status: number, body: { error?: string; missing?: string[] }): string {
+  switch (body.error) {
+    case 'requirements_unmet':
+      return `this stage still needs: ${(body.missing ?? []).join(', ')}`
+    case 'not_allowed':
+      return 'that stage cannot be reached from here'
+    case 'reason_required':
+      return 'that move needs a reason'
+    case 'cannot_force':
+      return 'only a team admin can force that move'
+    default:
+      return REASONS[status] ?? `the server rejected that (${status})`
+  }
 }
 
 /**
@@ -42,7 +59,13 @@ export function createApi(getUser: () => string) {
       throw new Error('the server could not be reached')
     }
     if (!response.ok) {
-      throw new Error(REASONS[response.status] ?? `the server rejected that (${response.status})`)
+      let body: { error?: string; missing?: string[] } = {}
+      try {
+        body = (await response.json()) as typeof body
+      } catch {
+        // No readable body: fall back to the status code.
+      }
+      throw new Error(explain(response.status, body))
     }
     return (await response.json()) as T
   }

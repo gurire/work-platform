@@ -110,6 +110,50 @@ const MIGRATIONS: readonly { id: string; sql: string }[] = [
         FOREIGN KEY (team_id, status_id) REFERENCES stages (team_id, key);
     `,
   },
+  {
+    // Stage rules (specs/workflow.md): requirements, listed moves, and who moved an item and why.
+    id: '0003_stage_rules',
+    sql: `
+      ALTER TABLE stage_history ADD COLUMN moved_by text REFERENCES users (id);
+      ALTER TABLE stage_history ADD COLUMN kind text NOT NULL DEFAULT 'move'
+        CHECK (kind IN ('move', 'forced', 'reopen'));
+      ALTER TABLE stage_history ADD COLUMN reason text;
+      CREATE TABLE stage_steps (
+        id         bigserial PRIMARY KEY,
+        team_id    text NOT NULL,
+        stage_key  text NOT NULL,
+        label      text NOT NULL,
+        position   integer NOT NULL,
+        FOREIGN KEY (team_id, stage_key) REFERENCES stages (team_id, key)
+      );
+      CREATE TABLE stage_required_fields (
+        team_id    text NOT NULL,
+        stage_key  text NOT NULL,
+        field_key  text NOT NULL,
+        label      text NOT NULL,
+        PRIMARY KEY (team_id, stage_key, field_key),
+        FOREIGN KEY (team_id, stage_key) REFERENCES stages (team_id, key)
+      );
+      CREATE TABLE stage_transitions (
+        team_id   text NOT NULL,
+        from_key  text NOT NULL,
+        to_key    text NOT NULL,
+        PRIMARY KEY (team_id, from_key, to_key),
+        FOREIGN KEY (team_id, from_key) REFERENCES stages (team_id, key),
+        FOREIGN KEY (team_id, to_key) REFERENCES stages (team_id, key)
+      );
+      -- Append-only: the latest event per step and pass is its current state.
+      CREATE TABLE step_events (
+        seq          bigserial PRIMARY KEY,
+        history_seq  bigint NOT NULL REFERENCES stage_history (seq),
+        step_id      bigint NOT NULL REFERENCES stage_steps (id),
+        ticked       boolean NOT NULL,
+        actor_id     text NOT NULL REFERENCES users (id),
+        at           timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX step_events_pass ON step_events (history_seq, step_id, seq);
+    `,
+  },
 ]
 
 export async function migrate(db: Db): Promise<string[]> {

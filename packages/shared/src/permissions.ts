@@ -4,6 +4,8 @@
  * nothing else. Deny by default: anything not granted here is refused.
  *
  * Do not change behaviour here without a change to the spec, approved by the owner.
+ * Stage actions (tick a step, force a move, reopen) come from specs/workflow.md, section 4.
+ * Editing stage rules is `team.config.edit`.
  */
 
 export const PERMISSION_ACTIONS = [
@@ -16,6 +18,9 @@ export const PERMISSION_ACTIONS = [
   'item.delete',
   'item.restore',
   'item.purge',
+  'item.tickStep',
+  'item.forceMove',
+  'item.reopen',
   'comment.add',
   'comment.editOwn',
   'comment.deleteAny',
@@ -83,6 +88,7 @@ const ALLOW_AUDITED: Decision = { allowed: true, audit: true }
 /** Actions an agent or API key can never perform, whatever it has been given. */
 const AGENT_NEVER: ReadonlySet<PermissionAction> = new Set([
   'item.move',
+  'item.forceMove',
   'item.restore',
   'item.purge',
   'comment.deleteAny',
@@ -132,6 +138,7 @@ function decideForUser(
     const sensitive =
       action === 'item.export' ||
       action === 'item.purge' ||
+      action === 'item.forceMove' ||
       action === 'team.access.edit' ||
       (team.isPrivate && user.teams[team.id] === undefined)
     return sensitive ? ALLOW_AUDITED : ALLOW
@@ -161,7 +168,11 @@ function decideForUser(
     case 'comment.add':
     case 'attachment.add':
     case 'savedView.manage':
+    case 'item.tickStep':
+    case 'item.reopen':
       return inTeam ? ALLOW : DENY
+    case 'item.forceMove':
+      return isTeamAdmin ? ALLOW_AUDITED : DENY
     case 'item.move': {
       if (isTeamAdmin) return ALLOW
       const destination = target.destinationTeam

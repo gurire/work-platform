@@ -1,13 +1,17 @@
 import type { FastifyInstance } from 'fastify'
 import {
+  allowedDestinations,
+  checkMove,
   decide,
+  isFilled,
   type PermissionAction,
   type PermissionTarget,
   type UserPrincipal,
   type Stage,
+  type StageTransition,
   type WorkItem,
 } from '@wm/shared'
-import type { Db } from '../db/db.js'
+import type { Db, Queryable } from '../db/db.js'
 import { resolvePrincipal } from '../principal.js'
 
 interface ItemRow {
@@ -74,6 +78,92 @@ async function audit(
   )
 }
 
+interface StepState {
+  id: string
+  label: string
+  ticked: boolean
+  tickedBy: string | null
+  tickedAt: string | null
+}
+
+interface WorkflowState {
+  stages: Stage[]
+  transitions: StageTransition[]
+  /** The current pass: the open stage_history row. */
+  passSeq: string | null
+  steps: StepState[]
+  requiredFields: { key: string; label: string; filled: boolean }[]
+  /** Labels of unmet requirements, steps first. */
+  missing: string[]
+}
+
+/** The current stage's rules and how far this item has got with them. */
+async function loadWorkflow(
+  db: Queryable,
+  row: Pick<ItemRow, 'id' | 'team_id' | 'status_id' | 'fields'>,
+  fields: Record<string, unknown> = row.fields,
+): Promise<WorkflowState> {
+  const stageRows = await db.query<{
+    key: string
+    name: string
+    category: Stage['category']
+    position: number
+  }>('SELECT key, name, category, position FROM stages WHERE team_id = $1 ORDER BY position', [
+    row.team_id,
+  ])
+  const transitions = await db.query<{ from_key: string; to_key: string }>(
+    'SELECT from_key, to_key FROM stage_transitions WHERE team_id = $1',
+    [row.team_id],
+  )
+  const pass = await db.query<{ seq: string }>(
+    'SELECT seq FROM stage_history WHERE item_id = $1 AND left_at IS NULL ORDER BY seq DESC LIMIT 1',
+    [row.id],
+  )
+  const passSeq = pass[0]?.seq ?? null
+  const steps = await db.query<{
+    id: string
+    label: string
+    ticked: boolean | null
+    actor_id: string | null
+    at: Date | string | null
+  }>(
+    `SELECT s.id, s.label, e.ticked, e.actor_id, e.at FROM stage_steps s
+     LEFT JOIN LATERAL (
+       SELECT ticked, actor_id, at FROM step_events
+       WHERE history_seq = $3 AND step_id = s.id ORDER BY seq DESC LIMIT 1
+     ) e ON true
+     WHERE s.team_id = $1 AND s.stage_key = $2 ORDER BY s.position, s.id`,
+    [row.team_id, row.status_id, passSeq],
+  )
+  const required = await db.query<{ field_key: string; label: string }>(
+    'SELECT field_key, label FROM stage_required_fields WHERE team_id = $1 AND stage_key = $2 ORDER BY label',
+    [row.team_id, row.status_id],
+  )
+  const stepState = steps.map((step): StepState => ({
+    id: String(step.id),
+    label: step.label,
+    ticked: step.ticked === true,
+    tickedBy: step.ticked ? step.actor_id : null,
+    tickedAt: step.ticked && step.at ? iso(step.at) : null,
+  }))
+  const fieldState = required.map((field) => ({
+    key: field.field_key,
+    label: field.label,
+    filled: isFilled(fields[field.field_key]),
+  }))
+  return {
+    stages: stageRows.map((stage) => ({ teamId: row.team_id, ...stage })),
+    transitions: transitions.map((t) => ({ from: t.from_key, to: t.to_key })),
+    passSeq,
+    steps: stepState,
+    requiredFields: fieldState,
+    missing: [
+      ...stepState.filter((step) => !step.ticked).map((step) => step.label),
+      ...fieldState.filter((field) => !field.filled).map((field) => field.label),
+    ],
+  }
+}
+
 export interface ItemRouteOptions {
   db: Db
   devAuth: boolean
@@ -128,6 +218,9 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       category: Stage['category']
       position: number
     }>('SELECT team_id, key, name, category, position FROM stages ORDER BY team_id, position')
+    const transitions = await db.query<{ team_id: string; from_key: string; to_key: string }>(
+      'SELECT team_id, from_key, to_key FROM stage_transitions',
+    )
     return {
       teams: visible.map((team) => ({
         id: team.id,
@@ -143,6 +236,9 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
             category: stage.category,
             position: stage.position,
           })),
+        transitions: transitions
+          .filter((t) => t.team_id === team.id)
+          .map((t): StageTransition => ({ from: t.from_key, to: t.to_key })),
       })),
     }
   })
@@ -158,8 +254,11 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       owner_id: string | null
       entered_at: Date | string
       left_at: Date | string | null
+      moved_by: string | null
+      kind: 'move' | 'forced' | 'reopen'
+      reason: string | null
     }>(
-      'SELECT stage_key, owner_id, entered_at, left_at FROM stage_history WHERE item_id = $1 ORDER BY seq',
+      'SELECT stage_key, owner_id, entered_at, left_at, moved_by, kind, reason FROM stage_history WHERE item_id = $1 ORDER BY seq',
       [row.id],
     )
     return {
@@ -168,9 +267,74 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
         ownerId: entry.owner_id,
         enteredAt: iso(entry.entered_at),
         leftAt: entry.left_at ? iso(entry.left_at) : null,
+        movedBy: entry.moved_by,
+        kind: entry.kind,
+        reason: entry.reason,
       })),
     }
   })
+
+  /** The current stage's checklist, required fields, and where the item can go next. */
+  app.get<{ Params: { id: string } }>('/items/:id/workflow', async (request, reply) => {
+    const principal = await resolvePrincipal(db, request, devAuth)
+    if (!principal) return reply.code(401).send({ error: 'unauthenticated' })
+    const row = await loadVisibleItem(principal, request.params.id)
+    if (!row) return reply.code(404).send({ error: 'not_found' })
+    return workflowPayload(principal, row, await loadWorkflow(db, row))
+  })
+
+  /** Tick or untick one checklist step of the item's current stage, for the current pass. */
+  app.post<{ Params: { id: string; stepId: string }; Body: { ticked: boolean } }>(
+    '/items/:id/steps/:stepId',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', maxLength: 64 },
+            stepId: { type: 'string', pattern: '^[0-9]{1,18}$' },
+          },
+          required: ['id', 'stepId'],
+        },
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['ticked'],
+          properties: { ticked: { type: 'boolean' } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = await resolvePrincipal(db, request, devAuth)
+      if (!principal) return reply.code(401).send({ error: 'unauthenticated' })
+      const row = await loadVisibleItem(principal, request.params.id)
+      if (!row) return reply.code(404).send({ error: 'not_found' })
+      if (!decide(principal, 'item.tickStep', targetOf(row)).allowed) {
+        return reply.code(403).send({ error: 'forbidden' })
+      }
+      const state = await loadWorkflow(db, row)
+      const step = state.steps.find((s) => s.id === request.params.stepId)
+      if (!step || state.passSeq === null) {
+        return reply.code(400).send({ error: 'step_not_in_stage' })
+      }
+      await db.query(
+        'INSERT INTO step_events (history_seq, step_id, ticked, actor_id) VALUES ($1, $2, $3, $4)',
+        [state.passSeq, step.id, request.body.ticked, principal.id],
+      )
+      return workflowPayload(principal, row, await loadWorkflow(db, row))
+    },
+  )
+
+  function workflowPayload(principal: UserPrincipal, row: ItemRow, state: WorkflowState) {
+    return {
+      stageKey: row.status_id,
+      steps: state.steps,
+      requiredFields: state.requiredFields,
+      missing: state.missing,
+      allowedMoves: allowedDestinations(state.stages, row.status_id, state.transitions),
+      canForce: decide(principal, 'item.forceMove', targetOf(row)).allowed,
+    }
+  }
 
   /** List items the caller may view. Hidden teams are filtered out in the query itself. */
   app.get<{ Querystring: { team?: string; q?: string; limit?: number; after?: string } }>(
@@ -259,7 +423,15 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
 
   app.patch<{
     Params: { id: string }
-    Body: { title?: string; statusId?: string; assigneeId?: string | null; priority?: number }
+    Body: {
+      title?: string
+      statusId?: string
+      assigneeId?: string | null
+      priority?: number
+      fields?: Record<string, string | number | boolean | null>
+      reason?: string
+      force?: boolean
+    }
   }>(
     '/items/:id',
     {
@@ -273,6 +445,18 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
             statusId: { type: 'string', maxLength: 64 },
             assigneeId: { type: ['string', 'null'], maxLength: 64 },
             priority: { type: 'integer', minimum: 0, maximum: 4 },
+            fields: {
+              type: 'object',
+              minProperties: 1,
+              maxProperties: 20,
+              propertyNames: { pattern: '^[a-z][a-z0-9_]{0,39}$', not: { enum: ['priority'] } },
+              additionalProperties: {
+                type: ['string', 'number', 'boolean', 'null'],
+                maxLength: 2000,
+              },
+            },
+            reason: { type: 'string', maxLength: 500 },
+            force: { type: 'boolean' },
           },
         },
       },
@@ -283,10 +467,17 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       const row = await loadVisibleItem(principal, request.params.id)
       if (!row) return reply.code(404).send({ error: 'not_found' })
 
-      const { title, statusId, assigneeId, priority } = request.body
+      const { title, statusId, assigneeId, priority, fields, reason, force } = request.body
+      const stageChanged = statusId !== undefined && statusId !== row.status_id
+      const fromEnd = row.status_category === 'done' || row.status_category === 'cancelled'
       const needed: PermissionAction[] = []
-      if (title !== undefined || priority !== undefined) needed.push('item.edit')
-      if (statusId !== undefined) needed.push('item.transition')
+      if (title !== undefined || priority !== undefined || fields !== undefined) {
+        needed.push('item.edit')
+      }
+      // Leaving a done or cancelled stage is reopening (specs/workflow.md, rule 8).
+      if (statusId !== undefined) {
+        needed.push(stageChanged && fromEnd ? 'item.reopen' : 'item.transition')
+      }
       if (assigneeId !== undefined) needed.push('item.assign')
       const target = targetOf(row)
       if (!needed.every((action) => decide(principal, action, target).allowed)) {
@@ -297,11 +488,15 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
       const params: unknown[] = []
       const param = (value: unknown): string => `$${params.push(value)}`
       if (title !== undefined) sets.push(`title = ${param(title)}`)
-      if (priority !== undefined) {
-        sets.push(`fields = jsonb_set(fields, '{priority}', to_jsonb(${param(priority)}::int))`)
+      let fieldsSql = 'fields'
+      if (fields !== undefined) {
+        fieldsSql = `(${fieldsSql} || ${param(JSON.stringify(fields))}::jsonb)`
       }
+      if (priority !== undefined) {
+        fieldsSql = `jsonb_set(${fieldsSql}, '{priority}', to_jsonb(${param(priority)}::int))`
+      }
+      if (fieldsSql !== 'fields') sets.push(`fields = ${fieldsSql}`)
       // The stage must belong to the item's own team.
-      const stageChanged = statusId !== undefined && statusId !== row.status_id
       if (statusId !== undefined) {
         const stages = await db.query<{ category: string }>(
           'SELECT category FROM stages WHERE team_id = $1 AND key = $2',
@@ -311,6 +506,31 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
         if (!stage) return reply.code(400).send({ error: 'unknown_status' })
         sets.push(`status_id = ${param(statusId)}`, `status_category = ${param(stage.category)}`)
       }
+      // Stage rules (specs/workflow.md). Fields filled in by this same request count.
+      let moveKind: 'move' | 'forced' | 'reopen' = 'move'
+      let moveMissing: readonly string[] = []
+      if (stageChanged && statusId !== undefined) {
+        const state = await loadWorkflow(db, row, { ...row.fields, ...(fields ?? {}) })
+        const check = checkMove({
+          stages: state.stages,
+          transitions: state.transitions,
+          fromKey: row.status_id,
+          toKey: statusId,
+          missing: state.missing,
+          force: force === true,
+          canForce: decide(principal, 'item.forceMove', target).allowed,
+          reason,
+        })
+        if (!check.ok) {
+          return reply.code(409).send({
+            error: check.error,
+            ...(check.missing ? { missing: check.missing } : {}),
+          })
+        }
+        moveKind = check.kind
+        moveMissing = state.missing
+      }
+      const moveReason = moveKind === 'move' ? null : (reason ?? '').trim()
       // The owner after this change: as given, or cleared on a hand-over if the team works that way.
       let nextOwner = row.assignee_id
       if (assigneeId !== undefined) {
@@ -339,9 +559,26 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
             [row.id],
           )
           await tx.query(
-            'INSERT INTO stage_history (item_id, stage_key, owner_id) VALUES ($1, $2, $3)',
-            [row.id, statusId, nextOwner],
+            'INSERT INTO stage_history (item_id, stage_key, owner_id, moved_by, kind, reason) VALUES ($1, $2, $3, $4, $5, $6)',
+            [row.id, statusId, nextOwner, principal.id, moveKind, moveReason],
           )
+          if (moveKind === 'forced') {
+            await tx.query(
+              'INSERT INTO audit_log (actor_id, action, team_id, object_id, detail) VALUES ($1, $2, $3, $4, $5::jsonb)',
+              [
+                principal.id,
+                'item.forceMove',
+                row.team_id,
+                row.id,
+                JSON.stringify({
+                  from: row.status_id,
+                  to: statusId,
+                  reason: moveReason,
+                  missing: moveMissing,
+                }),
+              ],
+            )
+          }
         } else if (nextOwner !== row.assignee_id) {
           await tx.query(
             'UPDATE stage_history SET owner_id = $2 WHERE item_id = $1 AND left_at IS NULL',
