@@ -94,4 +94,18 @@ describe('ItemStore', () => {
     store.append(generateSampleWorkItems(1000))
     expect(store.getView().total).toBe(1000)
   })
+
+  it('put replaces a known item and adds an unknown one (opened from a link)', () => {
+    const changed = vi.fn()
+    store.subscribeItem('item-1', changed)
+    const known = store.getItem('item-1')!
+    store.put({ ...known, title: 'Renamed on the server' })
+    expect(store.getItem('item-1')?.title).toBe('Renamed on the server')
+    expect(changed).toHaveBeenCalled()
+    expect(store.getView().total).toBe(1000)
+
+    store.put({ ...known, id: 'item-new', key: 'OPS-9999', title: 'From a shared link' })
+    expect(store.idForKey('ops-9999')).toBe('item-new')
+    expect(store.getView().total).toBe(1001)
+  })
 })

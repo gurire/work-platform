@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { allowedDestinations, SAMPLE_PRIORITIES } from '@wm/shared'
 import { createApi, type ApiTeam, type ApiUser, type Me } from './api'
 import { CommandPalette, type Command } from './CommandPalette'
+import { itemHash, parseRoute, type Route } from './item-model'
+import { ItemPage } from './ItemPage'
 import { ItemList, type Density } from './ItemList'
 import { measureInteraction, perfStore } from './perf'
 import { ItemStore, type CategoryFilter, type ItemPatch } from './store'
@@ -46,6 +48,7 @@ export function ItemsScreen() {
   )
   const [palette, setPalette] = useState<PaletteMode | null>(null)
   const [userId, setUserId] = useState(devUser)
+  const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash))
   const [me, setMe] = useState<Me | null>(null)
   const [users, setUsers] = useState<readonly ApiUser[]>([])
   const [teams, setTeams] = useState<readonly ApiTeam[]>([])
@@ -56,7 +59,20 @@ export function ItemsScreen() {
 
   const ids = view.ids
   const safeCursor = Math.min(cursor, Math.max(ids.length - 1, 0))
-  const currentId = ids[safeCursor]
+  // On an item page, commands act on that item; on the list, on the selected row.
+  const currentId = route.page === 'item' ? store.idForKey(route.key) : ids[safeCursor]
+  const routeIndex = route.page === 'item' && currentId ? ids.indexOf(currentId) : -1
+
+  // The address bar holds the open item (#/item/KEY), so links and Back work.
+  useEffect(() => {
+    const onHash = () => setRoute(parseRoute(window.location.hash))
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+  // Keep the list selection on the open item, so going back lands on it.
+  useEffect(() => {
+    if (routeIndex >= 0) setCursor(routeIndex)
+  }, [routeIndex])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -125,6 +141,22 @@ export function ItemsScreen() {
       measureInteraction(label, eventTime.current || performance.now())
     },
     [currentId],
+  )
+
+  const openItem = useCallback((key: string) => {
+    window.location.hash = itemHash(key)
+  }, [])
+  const backToList = useCallback(() => {
+    window.history.pushState(null, '', window.location.pathname + window.location.search)
+    setRoute({ page: 'list' })
+  }, [])
+  const stepItem = useCallback(
+    (delta: number) => {
+      const next = ids[routeIndex + delta]
+      const item = next ? store.getItem(next) : undefined
+      if (routeIndex >= 0 && item) openItem(item.key)
+    },
+    [ids, routeIndex, openItem],
   )
 
   const move = useCallback(
@@ -221,19 +253,10 @@ export function ItemsScreen() {
   const dynamicCommands = useCallback(
     (query: string): Command[] => {
       if (palette !== 'all' || !/^[a-z]+-\d+$/i.test(query)) return []
-      const id = store.idForKey(query)
-      const index = id ? ids.indexOf(id) : -1
-      if (index < 0) return []
-      return [
-        {
-          id: `goto-${id}`,
-          group: 'Go to',
-          label: query.toUpperCase(),
-          run: () => setCursor(index),
-        },
-      ]
+      const key = query.toUpperCase()
+      return [{ id: `open-${key}`, group: 'Open item', label: key, run: () => openItem(key) }]
     },
-    [palette, ids],
+    [palette, openItem],
   )
 
   useEffect(() => {
@@ -246,7 +269,7 @@ export function ItemsScreen() {
         return
       }
       const target = event.target as HTMLElement
-      const typing = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+      const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
       if (typing) {
         if (event.key === 'Escape') target.blur()
         return
@@ -257,7 +280,28 @@ export function ItemsScreen() {
         return
       }
       if (mod || event.altKey) return
+      if (route.page === 'item') {
+        const itemActions: Record<string, () => void> = {
+          Escape: backToList,
+          j: () => stepItem(1),
+          k: () => stepItem(-1),
+          s: () => setPalette('status'),
+          a: () => setPalette('assignee'),
+          p: () => setPalette('priority'),
+          t: toggleTheme,
+        }
+        const itemAction = itemActions[event.key]
+        if (itemAction) {
+          event.preventDefault()
+          itemAction()
+        }
+        return
+      }
       const actions: Record<string, () => void> = {
+        Enter: () => {
+          const item = currentId ? store.getItem(currentId) : undefined
+          if (item) openItem(item.key)
+        },
         j: () => move(1, event.timeStamp),
         ArrowDown: () => move(1, event.timeStamp),
         k: () => move(-1, event.timeStamp),
@@ -281,7 +325,17 @@ export function ItemsScreen() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [move, ids.length, cycleDensity, toggleTheme])
+  }, [
+    move,
+    ids.length,
+    cycleDensity,
+    toggleTheme,
+    route,
+    backToList,
+    stepItem,
+    openItem,
+    currentId,
+  ])
 
   const onSelect = useCallback((index: number) => setCursor(index), [])
 
@@ -304,88 +358,108 @@ export function ItemsScreen() {
             ))}
           </select>
         </label>
-        <div className="tabs" role="tablist" aria-label="Status filter">
-          {CATEGORIES.map((category) => (
-            <button
-              key={category.id}
-              role="tab"
-              aria-selected={view.category === category.id}
-              className={view.category === category.id ? 'tab tab-active' : 'tab'}
-              onClick={(event) => {
-                store.applyFilter(view.query, category.id)
-                setCursor(0)
-                measureInteraction('Filter', event.timeStamp)
-              }}
-            >
-              {category.label}
-            </button>
-          ))}
-        </div>
-        <input
-          ref={filterRef}
-          className="filter"
-          type="search"
-          aria-label="Filter items"
-          placeholder="Filter by key or title  ( / )"
-          value={view.query}
-          onChange={(event) => {
-            store.applyFilter(event.target.value, view.category)
-            setCursor(0)
-            measureInteraction('Filter', event.nativeEvent.timeStamp)
-          }}
-        />
+        {route.page === 'list' && (
+          <div className="tabs" role="tablist" aria-label="Status filter">
+            {CATEGORIES.map((category) => (
+              <button
+                key={category.id}
+                role="tab"
+                aria-selected={view.category === category.id}
+                className={view.category === category.id ? 'tab tab-active' : 'tab'}
+                onClick={(event) => {
+                  store.applyFilter(view.query, category.id)
+                  setCursor(0)
+                  measureInteraction('Filter', event.timeStamp)
+                }}
+              >
+                {category.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {route.page === 'list' && (
+          <input
+            ref={filterRef}
+            className="filter"
+            type="search"
+            aria-label="Filter items"
+            placeholder="Filter by key or title  ( / )"
+            value={view.query}
+            onChange={(event) => {
+              store.applyFilter(event.target.value, view.category)
+              setCursor(0)
+              measureInteraction('Filter', event.nativeEvent.timeStamp)
+            }}
+          />
+        )}
         <button className="button" onClick={() => setPalette('all')}>
           Commands <kbd>Ctrl K</kbd>
         </button>
       </header>
 
-      <div className="columns" aria-hidden="true">
-        <span className="cell cell-key">Key</span>
-        <span className="cell cell-title">Title</span>
-        <span className="cell cell-kind">Kind</span>
-        <span className="cell cell-status">Stage</span>
-        <span className="cell cell-priority">Priority</span>
-        <span className="cell cell-assignee">Assignee</span>
-      </div>
+      {route.page === 'item' ? (
+        <ItemPage
+          api={api}
+          store={store}
+          itemKey={route.key}
+          me={me}
+          teams={teams}
+          users={users}
+          positionLabel={routeIndex >= 0 ? `Item ${routeIndex + 1} of ${ids.length}` : null}
+          onBack={backToList}
+        />
+      ) : (
+        <>
+          <div className="columns" aria-hidden="true">
+            <span className="cell cell-key">Key</span>
+            <span className="cell cell-title">Title</span>
+            <span className="cell cell-kind">Kind</span>
+            <span className="cell cell-status">Stage</span>
+            <span className="cell cell-priority">Priority</span>
+            <span className="cell cell-assignee">Assignee</span>
+          </div>
 
-      <ItemList
-        store={store}
-        ids={ids}
-        cursor={safeCursor}
-        density={density}
-        userNames={userNames}
-        stageNames={stageNames}
-        onSelect={onSelect}
-        onRenderedRows={setRenderedRows}
-      />
+          <ItemList
+            store={store}
+            ids={ids}
+            cursor={safeCursor}
+            density={density}
+            userNames={userNames}
+            stageNames={stageNames}
+            onSelect={onSelect}
+            onRenderedRows={setRenderedRows}
+          />
 
-      <footer className="hud" aria-label="Performance readout">
-        <span>
-          {ids.length.toLocaleString()} of {view.total.toLocaleString()} items
-        </span>
-        <span>{renderedRows} rows in DOM</span>
-        <span className={load.status === 'error' ? 'hud-bad' : undefined}>
-          {load.status === 'loading' && 'loading…'}
-          {load.status === 'ready' && `loaded in ${load.ms.toFixed(0)} ms`}
-          {load.status === 'error' && `could not load: ${load.message}`}
-        </span>
-        {me && (
-          <span>
-            {me.name} · {me.orgRole.replace('_', ' ')} · teams:{' '}
-            {Object.keys(me.teams).join(', ') || 'none'}
-          </span>
-        )}
-        <span>filter {view.filterMs.toFixed(1)} ms</span>
-        {perf.map((stat) => (
-          <span key={stat.label} className={stat.p95 > 100 ? 'hud-bad' : 'hud-good'}>
-            {stat.label}: last {stat.last.toFixed(0)} · p50 {stat.p50.toFixed(0)} · p95{' '}
-            {stat.p95.toFixed(0)} ms ({stat.count})
-          </span>
-        ))}
-        <span className="muted">
-          J/K move · S stage · A owner · P priority · D density · T theme · Ctrl Z undo
-        </span>
-      </footer>
+          <footer className="hud" aria-label="Performance readout">
+            <span>
+              {ids.length.toLocaleString()} of {view.total.toLocaleString()} items
+            </span>
+            <span>{renderedRows} rows in DOM</span>
+            <span className={load.status === 'error' ? 'hud-bad' : undefined}>
+              {load.status === 'loading' && 'loading…'}
+              {load.status === 'ready' && `loaded in ${load.ms.toFixed(0)} ms`}
+              {load.status === 'error' && `could not load: ${load.message}`}
+            </span>
+            {me && (
+              <span>
+                {me.name} · {me.orgRole.replace('_', ' ')} · teams:{' '}
+                {Object.keys(me.teams).join(', ') || 'none'}
+              </span>
+            )}
+            <span>filter {view.filterMs.toFixed(1)} ms</span>
+            {perf.map((stat) => (
+              <span key={stat.label} className={stat.p95 > 100 ? 'hud-bad' : 'hud-good'}>
+                {stat.label}: last {stat.last.toFixed(0)} · p50 {stat.p50.toFixed(0)} · p95{' '}
+                {stat.p95.toFixed(0)} ms ({stat.count})
+              </span>
+            ))}
+            <span className="muted">
+              J/K move · Enter open · S stage · A owner · P priority · D density · T theme · Ctrl Z
+              undo
+            </span>
+          </footer>
+        </>
+      )}
 
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((toast) => (

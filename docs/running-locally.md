@@ -50,3 +50,26 @@ are not on), it is reverted and a message explains why.
 
 The bar at the bottom shows load time and, per action, the time from key press to the next
 paint. The target is under 100 ms.
+
+## The item page
+
+Press `Enter` on a row, or type an item key in `Ctrl K`, to open its page. The address bar
+changes to `#/item/KEY`, so the link can be shared and the browser's Back button works.
+
+The page shows:
+
+- the stage strip: every stage of the team, which are done, where the item is now, and who
+  owned each stage (a "pass 2" note means the item came back to this stage);
+- what the current stage still needs: tick the checklist steps and fill in required fields
+  such as **Coverage** in DATA Validation;
+- the moves allowed from here. A forward move stays greyed out until the requirements are met.
+  Team admins see **Force to …** instead and must give a reason, which is recorded. Finished
+  items show **Reopen to …**, which also needs a reason;
+- the stage history, newest first, and the owner and other details on the right.
+
+On the item page: `J`/`K` next and previous item in the current list, `S`/`A`/`P` as on the
+list, `Esc` back to the list.
+
+To try the rules, open a DATA item in Validation as Chen Wei (the default sign-in, a DATA
+member): the forward move is held back until the steps are ticked and Coverage is filled in.
+Then act as Grace Lim (DATA team admin) to see **Force to …**.

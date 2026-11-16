@@ -7,7 +7,10 @@ import type { Stage, StatusCategory, WorkItem } from '@wm/shared'
 
 type Listener = () => void
 export type CategoryFilter = 'all' | StatusCategory
-export type ItemPatch = Partial<Pick<WorkItem, 'statusId' | 'assigneeId'>> & { priority?: number }
+export type ItemPatch = Partial<Pick<WorkItem, 'statusId' | 'assigneeId'>> & {
+  priority?: number
+  fields?: Record<string, string | number | boolean | null>
+}
 
 export interface Toast {
   readonly id: number
@@ -201,6 +204,17 @@ export class ItemStore {
     if (patch.priority !== undefined) {
       next = { ...next, fields: { ...next.fields, priority: patch.priority } }
     }
+    if (patch.fields !== undefined) next = { ...next, fields: { ...next.fields, ...patch.fields } }
     return next
+  }
+
+  /** Put the server's copy of one item into the store, for example after a move on the item page. */
+  put(item: WorkItem): void {
+    if (!this.items.has(item.id)) {
+      this.append([item])
+      return
+    }
+    this.setItem(item)
+    this.haystack.set(item.id, `${item.key} ${item.title}`.toLowerCase())
   }
 }

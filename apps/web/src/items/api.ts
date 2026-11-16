@@ -1,4 +1,5 @@
 import type { Stage, StageTransition, WorkItem } from '@wm/shared'
+import type { HistoryEntry } from './item-model'
 import type { ItemPatch } from './store'
 
 export interface ApiUser {
@@ -13,6 +14,23 @@ export interface ApiTeam {
   readonly handOffClearsOwner: boolean
   readonly stages: readonly Stage[]
   readonly transitions: readonly StageTransition[]
+}
+
+export interface WorkflowStep {
+  readonly id: string
+  readonly label: string
+  readonly ticked: boolean
+  readonly tickedBy: string | null
+  readonly tickedAt: string | null
+}
+
+export interface Workflow {
+  readonly stageKey: string
+  readonly steps: readonly WorkflowStep[]
+  readonly requiredFields: readonly { key: string; label: string; filled: boolean }[]
+  readonly missing: readonly string[]
+  readonly allowedMoves: readonly string[]
+  readonly canForce: boolean
 }
 
 export interface Me extends ApiUser {
@@ -78,6 +96,30 @@ export function createApi(getUser: () => string) {
       request<{ items: WorkItem[]; nextAfter: string | null }>(
         `/items?limit=${limit}${after ? `&after=${after}` : ''}`,
       ),
+    getItem: (idOrKey: string) =>
+      request<{ item: WorkItem }>(`/items/${encodeURIComponent(idOrKey)}`).then((b) => b.item),
+    workflow: (id: string) => request<Workflow>(`/items/${encodeURIComponent(id)}/workflow`),
+    stageHistory: (id: string) =>
+      request<{ history: HistoryEntry[] }>(`/items/${encodeURIComponent(id)}/stages`).then(
+        (b) => b.history,
+      ),
+    tickStep: (id: string, stepId: string, ticked: boolean) =>
+      request<Workflow>(`/items/${encodeURIComponent(id)}/steps/${encodeURIComponent(stepId)}`, {
+        method: 'POST',
+        body: JSON.stringify({ ticked }),
+      }),
+    /** A stage move that may need a reason (reopening) or be forced by a team admin. */
+    moveItem: async (
+      id: string,
+      statusId: string,
+      options: { reason?: string; force?: boolean } = {},
+    ): Promise<WorkItem | null> => {
+      const body = await request<{ item: WorkItem | null }>(`/items/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ statusId, ...options }),
+      })
+      return body.item
+    },
     /** Sends one change and returns the item as the server now has it. */
     saveItem: async (item: WorkItem, patch: ItemPatch): Promise<WorkItem | null> => {
       const body = await request<{ item: WorkItem | null }>(
