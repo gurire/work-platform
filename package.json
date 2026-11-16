@@ -14,7 +14,8 @@
     "format:check": "prettier --check .",
     "check:licenses": "node scripts/check-licenses.mjs",
     "synth": "pnpm --filter @wm/infra run synth",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm synth && pnpm check:licenses"
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm synth && pnpm check:licenses",
+    "ship": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ship.ps1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
