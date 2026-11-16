@@ -13,6 +13,7 @@ import {
   type Verdict,
 } from '@wm/shared'
 import type { Db, Queryable } from '../db/db.js'
+import { notify } from '../inbox.js'
 import { loadUserPrincipal, resolvePrincipal } from '../principal.js'
 import { iso, loadVisibleItemIn, loadWorkflow, targetOf, type ItemRow } from './items.js'
 
@@ -239,6 +240,15 @@ export function registerReviewRoutes(
         // The unique index allows one open round per item; a second request loses the race.
         return reply.code(409).send({ error: 'round_open' })
       }
+      await notify(
+        db,
+        check.reviewers.map((userId) => ({
+          userId,
+          kind: 'review_requested' as const,
+          itemId: row.id,
+          actorId: principal.id,
+        })),
+      )
       return reviewsPayload(principal, row)
     },
   )
@@ -328,6 +338,17 @@ export function registerReviewRoutes(
           )
         }
       })
+      // The person who asked for the review hears how it ended (specs/comments.md, rule 4.1).
+      if (outcome !== 'open') {
+        await notify(db, [
+          {
+            userId: round.requested_by,
+            kind: outcome === 'approved' ? 'review_approved' : 'review_changes_requested',
+            itemId: row.id,
+            actorId: principal.id,
+          },
+        ])
+      }
       const updated = await loadVisibleItemIn(db, principal, row.id)
       if (!updated) return reply.code(404).send({ error: 'not_found' })
       return reviewsPayload(principal, updated)

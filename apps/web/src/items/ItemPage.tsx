@@ -9,6 +9,7 @@ import {
 import type { Api, ApiTeam, ApiUser, Me, Workflow, WorkflowStep } from './api'
 import { buildStageStrip, timeAgo, type HistoryEntry } from './item-model'
 import { CodePanel } from './CodePanel'
+import { CommentsPanel } from './CommentsPanel'
 import { RecordCard } from './RecordCard'
 import { ReviewPanel } from './ReviewPanel'
 import type { ItemStore } from './store'
@@ -397,6 +398,8 @@ export function ItemPage({
             stageName={stageName}
             onChanged={() => setReload((n) => n + 1)}
           />
+
+          <CommentsPanel api={api} store={store} item={item} users={users} />
 
           <CodePanel api={api} item={item} />
 

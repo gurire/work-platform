@@ -15,6 +15,7 @@ import {
 import type { Db, Queryable } from '../db/db.js'
 import { resolvePrincipal } from '../principal.js'
 import { canLinkRecord } from './records.js'
+import { notify } from '../inbox.js'
 
 export interface ItemRow {
   seq: string
@@ -689,6 +690,12 @@ export function registerItemRoutes(app: FastifyInstance, { db, devAuth }: ItemRo
           )
         }
       })
+      // A new owner hears about it (specs/comments.md, rule 4.1); never about themselves.
+      if (assigneeId !== undefined && nextOwner !== null && nextOwner !== row.assignee_id) {
+        await notify(db, [
+          { userId: nextOwner, kind: 'assigned', itemId: row.id, actorId: principal.id },
+        ])
+      }
       const updated = await loadVisibleItem(principal, row.id)
       return { item: updated ? toWorkItem(updated) : null }
     },

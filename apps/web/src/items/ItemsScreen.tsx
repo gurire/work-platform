@@ -4,6 +4,8 @@ import { createApi, type ApiTeam, type ApiUser, type Me } from './api'
 import { CommandPalette, type Command } from './CommandPalette'
 import { boardHash, itemHash, parseRoute, recordHash, type Route } from './item-model'
 import { Board } from './Board'
+import { Inbox } from './Inbox'
+import type { InboxEntry } from './api'
 import { ItemPage } from './ItemPage'
 import { RecordPage } from './RecordPage'
 import { ItemList, type Density } from './ItemList'
@@ -51,6 +53,7 @@ export function ItemsScreen() {
   const [palette, setPalette] = useState<PaletteMode | null>(null)
   const [userId, setUserId] = useState(devUser)
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash))
+  const [inbox, setInbox] = useState<{ unread: number; entries: InboxEntry[] } | null>(null)
   const [me, setMe] = useState<Me | null>(null)
   const [users, setUsers] = useState<readonly ApiUser[]>([])
   const [teams, setTeams] = useState<readonly ApiTeam[]>([])
@@ -152,6 +155,36 @@ export function ItemsScreen() {
     window.history.pushState(null, '', window.location.pathname + window.location.search)
     setRoute({ page: 'list' })
   }, [])
+  // The inbox refreshes every 30 seconds, and whenever the user or the page changes.
+  const refreshInbox = useCallback(() => {
+    api.inbox().then(setInbox, () => {
+      // Leave the last known inbox in place; the next refresh tries again.
+    })
+  }, [])
+  useEffect(() => {
+    setInbox(null)
+    refreshInbox()
+    const timer = setInterval(refreshInbox, 30_000)
+    return () => clearInterval(timer)
+  }, [userId, refreshInbox])
+  useEffect(() => {
+    if (route.page === 'inbox') refreshInbox()
+  }, [route, refreshInbox])
+  const openInbox = useCallback(() => {
+    window.location.hash = '#/inbox'
+  }, [])
+  const openInboxEntry = useCallback(
+    (entry: InboxEntry) => {
+      if (!entry.read) {
+        void api.markRead([entry.id]).then(refreshInbox, refreshInbox)
+      }
+      window.location.hash = itemHash(entry.itemKey)
+    },
+    [refreshInbox],
+  )
+  const markAllRead = useCallback(() => {
+    void api.markRead().then(refreshInbox, refreshInbox)
+  }, [refreshInbox])
   const openBoard = useCallback((teamId: string) => {
     window.location.hash = boardHash(teamId)
   }, [])
@@ -299,6 +332,13 @@ export function ItemsScreen() {
         return
       }
       if (mod || event.altKey) return
+      if (route.page === 'inbox') {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          backToList()
+        }
+        return
+      }
       if (route.page === 'board') {
         if (event.key === 'Escape') {
           event.preventDefault()
@@ -354,6 +394,7 @@ export function ItemsScreen() {
           const teamId = currentTeam?.id ?? teams[0]?.id
           if (teamId) openBoard(teamId)
         },
+        i: openInbox,
         '/': () => filterRef.current?.focus(),
       }
       const action = actions[event.key]
@@ -378,6 +419,7 @@ export function ItemsScreen() {
     currentTeam,
     teams,
     openBoard,
+    openInbox,
   ])
 
   const onSelect = useCallback((index: number) => setCursor(index), [])
@@ -435,6 +477,13 @@ export function ItemsScreen() {
             }}
           />
         )}
+        {route.page !== 'inbox' && (
+          <button className="button" onClick={openInbox}>
+            Inbox
+            {inbox && inbox.unread > 0 && <span className="badge-count">{inbox.unread}</span>}{' '}
+            <kbd>I</kbd>
+          </button>
+        )}
         {route.page !== 'board' && (
           <button
             className="button"
@@ -467,6 +516,13 @@ export function ItemsScreen() {
           positionLabel={routeIndex >= 0 ? `Item ${routeIndex + 1} of ${ids.length}` : null}
           onBack={backToList}
           onOpenRecord={openRecord}
+        />
+      ) : route.page === 'inbox' ? (
+        <Inbox
+          entries={inbox?.entries ?? null}
+          users={users}
+          onOpen={openInboxEntry}
+          onMarkAllRead={markAllRead}
         />
       ) : route.page === 'board' ? (
         <Board
@@ -536,8 +592,8 @@ export function ItemsScreen() {
               </span>
             ))}
             <span className="muted">
-              J/K move · Enter open · B board · S stage · A owner · P priority · D density · T theme
-              · Ctrl Z undo
+              J/K move · Enter open · I inbox · B board · S stage · A owner · P priority · D density
+              · T theme · Ctrl Z undo
             </span>
           </footer>
         </>

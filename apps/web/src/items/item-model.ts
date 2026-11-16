@@ -68,6 +68,7 @@ export type Route =
   | { readonly page: 'item'; readonly key: string }
   | { readonly page: 'record'; readonly id: string }
   | { readonly page: 'board'; readonly teamId: string }
+  | { readonly page: 'inbox' }
 
 /** `#/item/ENG-42` opens an item, `#/record/<id>` a record; anything else is the list. */
 export function parseRoute(hash: string): Route {
@@ -75,6 +76,7 @@ export function parseRoute(hash: string): Route {
   if (item?.[1]) return { page: 'item', key: item[1] }
   const record = /^#\/record\/([A-Za-z0-9_-]{1,80})$/.exec(hash)
   if (record?.[1]) return { page: 'record', id: record[1] }
+  if (hash === '#/inbox') return { page: 'inbox' }
   const board = /^#\/board\/([A-Za-z0-9_-]{1,64})$/.exec(hash)
   if (board?.[1]) return { page: 'board', teamId: board[1] }
   return { page: 'list' }
