@@ -7,9 +7,9 @@
   <tr><td valign="middle"><b>Subject</b></td><td valign="middle">Draft outline of roles, objects, actions and surfaces, for the owner to decide</td></tr>
 </table>
 
-**Status: DRAFT OUTLINE, not approved.** Claude drafted this for the owner to correct. Nothing
-here is a rule until the owner approves it. Every "Proposed" value is a starting suggestion.
-Once approved, this file is human-owned and generates the protected permission tests.
+**Status: DRAFT, decisions recorded, not yet approved.** Claude drafted this and the owner answered
+the ten decisions in section 6 on 16 Nov 2026. It becomes binding when the owner merges it.
+Once merged, this file is human-owned and generates the protected permission tests.
 
 ---
 
@@ -29,15 +29,15 @@ Once approved, this file is human-owned and generates the protected permission t
 
 ## 2. Principals
 
-| Role             | Who                                               | Scope of access (proposed)                    |
-| ---------------- | ------------------------------------------------- | --------------------------------------------- |
-| Org admin        | Runs the platform                                 | Everything, including configuration and audit |
-| Team admin       | Leads a team                                      | Their teams' items and team configuration     |
-| Member           | Internal employee on one or more teams            | Their teams' items; see section 6, decision 1 |
-| Viewer           | Internal, read-only (for example a stakeholder)   | Same visibility as a member, no changes       |
-| Client guest     | External person from one client                   | Only items shared with that client            |
-| Portal requester | Anyone who raises a service desk request (later)  | Only their own requests                       |
-| Agent / API key  | AI agent, automation or integration with an owner | Listed scopes, capped at the owner's access   |
+| Role             | Who                                               | Scope of access (proposed)                             |
+| ---------------- | ------------------------------------------------- | ------------------------------------------------------ |
+| Org admin        | Runs the platform                                 | Everything, including configuration and audit          |
+| Team admin       | Leads a team                                      | Their teams' items and team configuration              |
+| Member           | Internal employee on one or more teams            | Views all open teams; changes items in their own teams |
+| Viewer           | Internal, read-only (for example a stakeholder)   | Views what a member can view; no changes               |
+| Client guest     | External person from one client                   | Only items shared with that client                     |
+| Portal requester | Anyone who raises a service desk request (later)  | Only their own requests                                |
+| Agent / API key  | AI agent, automation or integration with an owner | Listed scopes, capped at the owner's access            |
 
 MVP for the engineering audience needs: org admin, team admin, member, viewer, agent / API key.
 Client guest and portal requester are defined now so the model does not have to change later.
@@ -73,47 +73,58 @@ The same decision applies on each. Each row below becomes a set of protected tes
 | AI features              | Context given to a model is filtered as the asking user would see it |
 | Webhooks (later)         | Payloads filtered to the subscriber's access                         |
 
-## 5. Draft matrix: engineering MVP
+## 5. Matrix: engineering MVP
 
-Y = allowed. N = not allowed. Own = only on objects they created or are assigned. Team = only
-within teams they belong to. All values are proposed.
+Y = allowed. N = not allowed. Own = only on objects they created. Team = only within teams
+they belong to. Open = every team that is not private, plus private teams they belong to.
+Granted = only if an org admin has granted that scope, and never beyond the owner's access.
 
-| Object: action               | Org admin | Team admin | Member | Viewer |   Agent / API key   |
-| ---------------------------- | :-------: | :--------: | :----: | :----: | :-----------------: |
-| Work item: view              |     Y     |    Team    |  Team  |  Team  |      By scope       |
-| Work item: create            |     Y     |    Team    |  Team  |   N    |      By scope       |
-| Work item: edit fields       |     Y     |    Team    |  Team  |   N    |      By scope       |
-| Work item: change status     |     Y     |    Team    |  Team  |   N    |      By scope       |
-| Work item: assign            |     Y     |    Team    |  Team  |   N    |      By scope       |
-| Work item: delete            |     Y     |    Team    |  Own   |   N    |          N          |
-| Comment: add                 |     Y     |    Team    |  Team  |   N    |      By scope       |
-| Comment: edit or delete own  |     Y     |     Y      |   Y    |   N    |      By scope       |
-| Comment: delete any          |     Y     |    Team    |   N    |   N    |          N          |
-| Attachment: add              |     Y     |    Team    |  Team  |   N    |      By scope       |
-| Attachment: delete           |     Y     |    Team    |  Own   |   N    |          N          |
-| Saved view: create and share |     Y     |    Team    |  Team  |  Own   |          N          |
-| Team configuration: edit     |     Y     |    Team    |   N    |   N    |          N          |
-| Org configuration: edit      |     Y     |     N      |   N    |   N    |          N          |
-| Audit log: view              |     Y     |     N      |   N    |   N    |          N          |
-| Export items                 |     Y     |    Team    |  Team  |   N    | By scope, see dec 5 |
+| Object: action                    | Org admin |  Team admin   |        Member        | Viewer | Agent / API key |
+| --------------------------------- | :-------: | :-----------: | :------------------: | :----: | :-------------: |
+| Work item: view                   |     Y     |     Open      |         Open         |  Open  |    By scope     |
+| Work item: create                 |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Work item: edit fields            |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Work item: change status          |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Work item: assign                 |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Work item: move to another team   |     Y     | Team (source) | Member of both teams |   N    |        N        |
+| Work item: delete (soft, 30 days) |     Y     |     Team      |         Own          |   N    |     Granted     |
+| Work item: restore within 30 days |     Y     |     Team      |         Own          |   N    |        N        |
+| Work item: delete permanently     |     Y     |       N       |          N           |   N    |        N        |
+| Comment: add                      |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Comment: edit or delete own       |     Y     |       Y       |          Y           |   N    |    By scope     |
+| Comment: delete any               |     Y     |     Team      |          N           |   N    |        N        |
+| Attachment: add                   |     Y     |     Team      |         Team         |   N    |    By scope     |
+| Attachment: delete                |     Y     |     Team      |         Own          |   N    |        N        |
+| Saved view: create and share      |     Y     |     Team      |         Team         |  Own   |        N        |
+| Team configuration: edit          |     Y     |     Team      |          N           |   N    |     Granted     |
+| Org configuration: edit           |     Y     |       N       |          N           |   N    |     Granted     |
+| Audit log: view                   |     Y     |       N       |          N           |   N    |        N        |
+| Export items (always audited)     |     Y     |     Open      |         Open         |   N    |    By scope     |
 
-## 6. Decisions the owner needs to make
+Org admins can view private teams; each such view is written to the audit log.
 
-| #   | Question                                                                                             | Proposed default                                                             |
-| --- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| 1   | Can internal members see items of teams they are not on?                                             | Yes for engineering teams (open by default), with private teams as an option |
-| 2   | Is there a "private team" or "restricted item" concept in the MVP (for example security or HR work)? | Private teams yes; per-item restriction later                                |
-| 3   | Can members delete items, or only cancel or archive them?                                            | Soft delete only, restorable for 30 days; hard delete by org admin           |
-| 4   | Who can move an item to another team?                                                                | Members of both teams, or a team admin of the source team                    |
-| 5   | Who may export data, and is every export logged?                                                     | Members for their teams; every export audited                                |
-| 6   | Can agents and API keys ever delete, or change configuration?                                        | No                                                                           |
-| 7   | Is "viewer" needed at launch, or are all internal users members?                                     | Keep viewer; it costs little and suits stakeholders                          |
-| 8   | When someone leaves a team, do they keep access to items they created or are assigned?               | No; access follows current membership                                        |
-| 9   | Do org admins see everything, including private teams?                                               | Yes, and each such view of a private team is audited                         |
-| 10  | For clients later: do guests see internal notes, time entries, rates or other guests?                | No to all four                                                               |
+## 6. Decisions (answered by the owner, 16 Nov 2026)
 
-Decision 1 conflicts with the "Team" values in section 5: if the answer is "yes, open by
-default", the view row becomes Y for members and viewers on all non-private teams.
+|  #  | Question                                                                  | Decision                                                                                   |
+| :-: | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+|  1  | Can internal members see items of teams they are not on?                  | Yes. Open by default, except teams marked private                                          |
+|  2  | Private teams or restricted items in the first release?                   | Private teams only. Per-item restriction later                                             |
+|  3  | Can members delete items?                                                 | Soft delete of their own items, restorable for 30 days. Permanent delete by org admin only |
+|  4  | Who can move an item to another team?                                     | A member of both teams, or a team admin of the source team                                 |
+|  5  | Who may export, and is it logged?                                         | Members, for items they can view. Every export is audited                                  |
+|  6  | Can agents and API keys delete or change configuration?                   | Yes to both, only if an org admin grants it, capped at the owner's access                  |
+|  7  | Is "viewer" needed at launch?                                             | Yes                                                                                        |
+|  8  | Does someone who leaves a team keep access to their old items?            | No. Access follows current membership and team visibility                                  |
+|  9  | Do org admins see private teams?                                          | Yes, and each such access is audited                                                       |
+| 10  | Do client guests see internal notes, time entries, rates or other guests? | No to all four                                                                             |
+
+### Still open (raised by the decisions above)
+
+|  #  | Question                                                                                    | Why it matters                                                                                           |
+| :-: | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 11  | With decision 6, may an agent be granted changes to roles, SSO, API keys or its own scopes? | If yes, an agent could widen its own access. Claude's suggestion: exclude these from what can be granted |
+| 12  | With decision 1, may members comment on or create items in open teams they are not on?      | The matrix currently says no (Team). Many teams want cross-team comments                                 |
+| 13  | Does an agent's delete follow the same soft-delete rule, and who may restore it?            | The matrix says soft delete only, restored by a human                                                    |
 
 ## 7. Field-level rules (proposed)
 
