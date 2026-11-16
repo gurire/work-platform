@@ -245,6 +245,47 @@ const MIGRATIONS: readonly { id: string; sql: string }[] = [
       CREATE INDEX stage_history_open ON stage_history (item_id) WHERE left_at IS NULL;
     `,
   },
+  {
+    // Status that follows the code (specs/code-status.md). Expand only.
+    id: '0007_code_status',
+    sql: `
+      ALTER TABLE stage_history DROP CONSTRAINT stage_history_kind_check;
+      ALTER TABLE stage_history ADD CONSTRAINT stage_history_kind_check
+        CHECK (kind IN ('move', 'forced', 'reopen', 'sent_back', 'automatic'));
+      CREATE TABLE code_rules (
+        team_id     text NOT NULL,
+        event_kind  text NOT NULL
+          CHECK (event_kind IN ('pr_opened', 'checks_passed', 'checks_failed', 'pr_merged', 'pr_closed')),
+        stage_key   text NOT NULL,
+        PRIMARY KEY (team_id, event_kind),
+        FOREIGN KEY (team_id, stage_key) REFERENCES stages (team_id, key)
+      );
+      CREATE TABLE code_links (
+        item_id     text NOT NULL REFERENCES work_items (id),
+        repo        text NOT NULL,
+        pr_number   integer NOT NULL,
+        url         text,
+        title       text,
+        state       text NOT NULL DEFAULT 'open' CHECK (state IN ('open', 'merged', 'closed')),
+        checks      text CHECK (checks IN ('passing', 'failing')),
+        updated_at  timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (item_id, repo, pr_number)
+      );
+      CREATE INDEX code_links_pr ON code_links (repo, pr_number);
+      -- Append-only: every event that reached an item, and what it did.
+      CREATE TABLE code_events (
+        seq         bigserial PRIMARY KEY,
+        item_id     text NOT NULL REFERENCES work_items (id),
+        repo        text NOT NULL,
+        pr_number   integer NOT NULL,
+        kind        text NOT NULL,
+        outcome     text NOT NULL CHECK (outcome IN ('moved', 'not_moved', 'no_rule')),
+        detail      text,
+        at          timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX code_events_item ON code_events (item_id, seq);
+    `,
+  },
 ]
 
 export async function migrate(db: Db): Promise<string[]> {

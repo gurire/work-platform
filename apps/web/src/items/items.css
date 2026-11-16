@@ -784,3 +784,23 @@ kbd {
   font-size: 12px;
   padding: 6px 4px 0;
 }
+
+/* --- code ------------------------------------------------------------------------------ */
+.code-chips {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.code-merged,
+.code-checks-passing {
+  color: var(--good);
+}
+.code-closed {
+  color: var(--text-muted);
+}
+.code-open {
+  color: var(--accent);
+}
+.code-checks-failing {
+  color: var(--bad);
+}

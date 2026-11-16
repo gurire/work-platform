@@ -129,6 +129,11 @@ The record rows come from `specs/records.md` (section 4, DRAFT of 17 Nov 2026: t
 yet answered ADR 0007 questions 3 and 5, and the narrower answer is used). "Team" means the
 record's home team. Seeing a record is the same check as seeing a work item of its home team.
 
+The code host (`specs/code-status.md`, DRAFT) is not a principal in this matrix: it can only
+deliver signed events, and what they may do is fixed by the team's code rules and the stage
+rules. Setting code rules is "Team configuration: edit workflows and fields". A person's
+override of an automatic move, and every automatic move, is audited.
+
 ## 6. Decisions (answered by the owner, 16 Nov 2026)
 
 |  #  | Question                                                                    | Decision                                                                                   |

@@ -8,6 +8,7 @@ import {
 } from '@wm/shared'
 import type { Api, ApiTeam, ApiUser, Me, Workflow, WorkflowStep } from './api'
 import { buildStageStrip, timeAgo, type HistoryEntry } from './item-model'
+import { CodePanel } from './CodePanel'
 import { RecordCard } from './RecordCard'
 import { ReviewPanel } from './ReviewPanel'
 import type { ItemStore } from './store'
@@ -397,21 +398,25 @@ export function ItemPage({
             onChanged={() => setReload((n) => n + 1)}
           />
 
+          <CodePanel api={api} item={item} />
+
           <section className="panel" aria-labelledby="activity-title">
             <h2 id="activity-title">Stage history</h2>
             <ul className="activity">
               {[...history].reverse().map((entry, index) => (
                 <li key={`${entry.enteredAt}-${index}`}>
                   <span>
-                    {entry.movedBy === null
-                      ? `Started in ${stageName(entry.stageKey)}`
-                      : entry.kind === 'forced'
-                        ? `${nameOf(entry.movedBy)} forced it to ${stageName(entry.stageKey)}`
-                        : entry.kind === 'reopen'
-                          ? `${nameOf(entry.movedBy)} reopened it to ${stageName(entry.stageKey)}`
-                          : entry.kind === 'sent_back'
-                            ? `${nameOf(entry.movedBy)} asked for changes; sent back to ${stageName(entry.stageKey)}`
-                            : `${nameOf(entry.movedBy)} moved it to ${stageName(entry.stageKey)}`}
+                    {entry.kind === 'automatic'
+                      ? `Moved automatically to ${stageName(entry.stageKey)}`
+                      : entry.movedBy === null
+                        ? `Started in ${stageName(entry.stageKey)}`
+                        : entry.kind === 'forced'
+                          ? `${nameOf(entry.movedBy)} forced it to ${stageName(entry.stageKey)}`
+                          : entry.kind === 'reopen'
+                            ? `${nameOf(entry.movedBy)} reopened it to ${stageName(entry.stageKey)}`
+                            : entry.kind === 'sent_back'
+                              ? `${nameOf(entry.movedBy)} asked for changes; sent back to ${stageName(entry.stageKey)}`
+                              : `${nameOf(entry.movedBy)} moved it to ${stageName(entry.stageKey)}`}
                     {entry.reason ? `: "${entry.reason}"` : ''}
                   </span>
                   <span className="muted">

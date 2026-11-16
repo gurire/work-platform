@@ -185,6 +185,10 @@ export async function seedDevData(db: Db, itemCount = 2000, pipelineCount = 300)
     assigneeId: 'user-2',
     createdBy: 'user-2',
   })
+  // ENG's status follows the code (specs/code-status.md).
+  await db.exec(`INSERT INTO code_rules (team_id, event_kind, stage_key) VALUES
+    ('ENG', 'pr_opened', 'in_review'), ('ENG', 'checks_failed', 'in_progress'),
+    ('ENG', 'pr_merged', 'done')`)
   // Each DATA item is about the dataset in its title.
   await db.exec(`UPDATE work_items
     SET record_id = 'rec-dataset-' || ((substring(key from 6)::int - 1) % ${DATASETS.length} + 1)

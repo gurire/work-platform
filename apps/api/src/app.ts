@@ -5,12 +5,15 @@ import { registerItemRoutes } from './routes/items.js'
 import { registerReviewRoutes } from './routes/reviews.js'
 import { registerRecordRoutes } from './routes/records.js'
 import { registerBoardRoutes } from './routes/board.js'
+import { registerCodeRoutes } from './routes/code.js'
 
 export interface AppOptions {
   /** Without a database only the health and meta routes exist. */
   db?: Db
   /** Development-only header sign-in. See principal.ts. Never enable in production. */
   devAuth?: boolean
+  /** Shared secret for signed code host events. Without it the webhook is off. */
+  codeWebhookSecret?: string
 }
 
 export function buildApp(options: AppOptions = {}): FastifyInstance {
@@ -30,6 +33,11 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
     registerReviewRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerRecordRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerBoardRoutes(app, { db: options.db, devAuth: options.devAuth === true })
+    registerCodeRoutes(app, {
+      db: options.db,
+      devAuth: options.devAuth === true,
+      webhookSecret: options.codeWebhookSecret,
+    })
   }
 
   return app
