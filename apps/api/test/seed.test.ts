@@ -14,6 +14,7 @@ describe('migrations and dev seed', () => {
       '0005_records',
       '0006_stage_limits',
       '0007_code_status',
+      '0008_comments',
     ])
     expect(await migrate(db)).toEqual([])
     await seedDevData(db, 40, 10)

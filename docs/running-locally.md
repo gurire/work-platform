@@ -42,7 +42,7 @@ If you ran the app before stages were added, delete `apps/api/.data` once to get
 
 ## Keys
 
-`J`/`K` or arrows move; `Enter` open; `B` board; `S` stage, `A` owner, `P` priority; `Ctrl K` every command, or an
+`J`/`K` or arrows move; `Enter` open; `I` inbox; `B` board; `S` stage, `A` owner, `P` priority; `Ctrl K` every command, or an
 item key such as `ENG-42`; `/` filter; `D` density; `T` theme; `Ctrl Z` undo.
 
 Edits show immediately. If the server refuses one (for example, changing an item in a team you
@@ -136,3 +136,18 @@ pnpm code-event merged ENG-12
 Then open ENG-12: the **Code** panel shows the pull request and its checks, and the stage
 history shows each automatic move. An item only moves where its stage allows, so pick an ENG
 item that is In Progress (moving from Todo straight to In Review is not an allowed move).
+
+## Comments and the inbox
+
+Every item page has a **Comments** panel. Type `@` and a few letters to mention someone, pick
+them from the list, and press `Ctrl Enter` to send. Tick **Internal note** for comments that
+must never reach clients (there are no client guests yet, so for now it is a label). You can
+edit or delete your own comments; a team admin can delete anyone's, which is audited.
+
+The **Inbox** button (or `I`) shows what needs you: mentions, items you now own, reviews you
+were asked to do, how your review requests ended, and comments on items you own. The number on
+the button is how many are unread; it refreshes every 30 seconds. Click an entry to open the
+item and mark it read.
+
+The sample data gives Chen Wei (the default sign-in) a few inbox entries to start with. If you
+ran the app before comments were added, delete `apps/api/.data` once.

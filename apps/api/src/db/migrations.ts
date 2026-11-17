@@ -286,6 +286,44 @@ const MIGRATIONS: readonly { id: string; sql: string }[] = [
       CREATE INDEX code_events_item ON code_events (item_id, seq);
     `,
   },
+  {
+    // Comments, mentions and the inbox (specs/comments.md). Expand only: new tables.
+    id: '0008_comments',
+    sql: `
+      CREATE TABLE comments (
+        id          bigserial PRIMARY KEY,
+        item_id     text NOT NULL REFERENCES work_items (id),
+        author_id   text NOT NULL REFERENCES users (id),
+        body        text NOT NULL,
+        internal    boolean NOT NULL DEFAULT false,
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        edited_at   timestamptz,
+        deleted_at  timestamptz,
+        deleted_by  text REFERENCES users (id)
+      );
+      CREATE INDEX comments_item ON comments (item_id, id);
+      -- Every earlier version of an edited or deleted comment (rules 2.3 and 2.4).
+      CREATE TABLE comment_versions (
+        seq         bigserial PRIMARY KEY,
+        comment_id  bigint NOT NULL REFERENCES comments (id),
+        body        text NOT NULL,
+        replaced_by text NOT NULL REFERENCES users (id),
+        replaced_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE inbox (
+        id          bigserial PRIMARY KEY,
+        user_id     text NOT NULL REFERENCES users (id),
+        kind        text NOT NULL CHECK (kind IN ('mentioned', 'assigned', 'review_requested',
+          'review_approved', 'review_changes_requested', 'commented')),
+        item_id     text NOT NULL REFERENCES work_items (id),
+        actor_id    text REFERENCES users (id),
+        comment_id  bigint REFERENCES comments (id),
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        read_at     timestamptz
+      );
+      CREATE INDEX inbox_user ON inbox (user_id, id DESC);
+    `,
+  },
 ]
 
 export async function migrate(db: Db): Promise<string[]> {

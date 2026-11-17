@@ -1,4 +1,5 @@
 import type {
+  InboxKind,
   RecordType,
   RecordValue,
   RoundState,
@@ -137,6 +138,37 @@ export interface ItemCode {
   }[]
 }
 
+export interface CommentView {
+  readonly id: string
+  readonly authorId: string
+  readonly body: string | null
+  readonly internal: boolean
+  readonly createdAt: string
+  readonly editedAt: string | null
+  readonly deletedAt: string | null
+  readonly deletedBy: string | null
+  readonly canEdit: boolean
+  readonly canDelete: boolean
+}
+
+export interface Comments {
+  readonly canComment: boolean
+  readonly comments: readonly CommentView[]
+  readonly notNotified?: readonly { id: string; name: string }[]
+}
+
+export interface InboxEntry {
+  readonly id: string
+  readonly kind: InboxKind
+  readonly itemId: string
+  readonly itemKey: string
+  readonly itemTitle: string
+  readonly actorId: string | null
+  readonly excerpt: string | null
+  readonly createdAt: string
+  readonly read: boolean
+}
+
 export interface Me extends ApiUser {
   readonly orgRole: 'org_admin' | 'member' | 'viewer'
   readonly teams: Readonly<Record<string, 'admin' | 'member'>>
@@ -161,6 +193,10 @@ function explain(
       return 'a limit must be a whole number from 1 to 999'
     case 'invalid_target':
       return 'a target must be a whole number of hours from 1 to 8760'
+    case 'empty_comment':
+      return 'write something first'
+    case 'deleted':
+      return 'that comment was deleted'
     case 'invalid_value':
       return `the value for ${body.field ?? 'a field'} does not fit it`
     case 'required_missing':
@@ -210,7 +246,12 @@ export function createApi(getUser: () => string) {
     try {
       response = await fetch(`/api${path}`, {
         ...init,
-        headers: { 'content-type': 'application/json', 'x-dev-user': getUser(), ...init.headers },
+        headers: {
+          // Only say the body is JSON when there is one; an empty JSON body is refused.
+          ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}),
+          'x-dev-user': getUser(),
+          ...init.headers,
+        },
       })
     } catch {
       throw new Error('the server could not be reached')
@@ -274,6 +315,25 @@ export function createApi(getUser: () => string) {
       request<Reviews>(`/reviews/${encodeURIComponent(roundId)}/withdraw`, {
         method: 'POST',
         body: '{}',
+      }),
+    comments: (id: string) => request<Comments>(`/items/${encodeURIComponent(id)}/comments`),
+    addComment: (id: string, body: string, internal: boolean) =>
+      request<Comments>(`/items/${encodeURIComponent(id)}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ body, internal }),
+      }),
+    editComment: (commentId: string, body: string) =>
+      request<Comments>(`/comments/${encodeURIComponent(commentId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ body }),
+      }),
+    deleteComment: (commentId: string) =>
+      request<Comments>(`/comments/${encodeURIComponent(commentId)}`, { method: 'DELETE' }),
+    inbox: () => request<{ unread: number; entries: InboxEntry[] }>('/inbox'),
+    markRead: (ids?: readonly string[]) =>
+      request<{ ok: boolean }>('/inbox/read', {
+        method: 'POST',
+        body: JSON.stringify(ids ? { ids } : {}),
       }),
     code: (id: string) => request<ItemCode>(`/items/${encodeURIComponent(id)}/code`),
     board: (teamId: string) =>

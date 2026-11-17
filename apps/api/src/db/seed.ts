@@ -194,6 +194,23 @@ export async function seedDevData(db: Db, itemCount = 2000, pipelineCount = 300)
     SET record_id = 'rec-dataset-' || ((substring(key from 6)::int - 1) % ${DATASETS.length} + 1)
     WHERE team_id = 'DATA'`)
   await db.exec("UPDATE work_items SET record_id = 'rec-sec-1' WHERE id = 'item-sec-1'")
+  // A few comments, and what they put in Chen's inbox (specs/comments.md).
+  // Only for items that exist (tests seed fewer items).
+  await db.exec(`INSERT INTO comments (item_id, author_id, body, internal)
+    SELECT v.item_id, v.author_id, v.body, v.internal FROM (VALUES
+      (1, 'data-item-5', 'user-7', 'Totals look off for 2019. @[Chen Wei](user-3) can you check against the source?', false),
+      (2, 'data-item-5', 'user-3', 'Checked: the source revised 2019 last month. Updating now.', false),
+      (3, 'data-item-12', 'user-9', 'Units are in thousands, not lakhs. Please fix the column names before review.', true),
+      (4, 'data-item-13', 'user-4', '@[Chen Wei](user-3) this one is ready for you to pick up.', false)
+    ) AS v(n, item_id, author_id, body, internal)
+    JOIN work_items w ON w.id = v.item_id ORDER BY v.n`)
+  await db.exec(`INSERT INTO inbox (user_id, kind, item_id, actor_id, comment_id)
+    SELECT 'user-3', 'mentioned', item_id, author_id, id FROM comments
+    WHERE body LIKE '%(user-3)%'`)
+  await db.exec(`INSERT INTO inbox (user_id, kind, item_id, actor_id)
+    SELECT 'user-3', v.kind, v.item_id, v.actor_id FROM (VALUES
+      ('assigned', 'data-item-2', 'user-7'), ('review_requested', 'data-item-21', 'user-4')
+    ) AS v(kind, item_id, actor_id) JOIN work_items w ON w.id = v.item_id`)
   // Spread out how long DATA items have waited in their stage (0 to 8 days), for the board.
   await db.exec(`UPDATE stage_history h
     SET entered_at = now() - make_interval(hours => (substring(w.key from 6)::int * 7) % 200)
