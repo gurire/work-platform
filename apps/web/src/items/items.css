@@ -163,7 +163,6 @@ kbd {
 .columns,
 .row {
   display: grid;
-  grid-template-columns: 112px minmax(200px, 1fr) 150px 110px 170px;
   align-items: center;
   padding: 0 16px;
 }
@@ -1087,4 +1086,214 @@ kbd {
   font-weight: 600;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* List views (redesign step 3) */
+.shell {
+  position: relative;
+}
+.cell-check {
+  display: flex;
+  align-items: center;
+}
+.cell-check input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent-strong);
+}
+.row .cell-check input {
+  opacity: 0.35;
+}
+.row:hover .cell-check input,
+.row-active .cell-check input,
+.row-selected .cell-check input,
+.row .cell-check input:focus-visible {
+  opacity: 1;
+}
+.row-selected {
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
+}
+.cell-stage,
+.cell-owner,
+.cell-team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.cell-owner,
+.cell-team,
+.cell-created,
+.cell-updated {
+  color: var(--text-muted);
+}
+.row-group {
+  display: flex;
+  align-items: flex-end;
+  padding: 0 12px 2px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.row-group:hover {
+  background: var(--surface);
+}
+.group-cell {
+  width: 100%;
+}
+.group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.group-toggle:hover {
+  background: var(--surface-sunken);
+}
+.group-count {
+  color: var(--text-subtle);
+  font-weight: 500;
+}
+.list-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+.list-count {
+  margin-left: auto;
+  font-size: 12px;
+}
+.chip-menu {
+  position: relative;
+}
+.chip-menu > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px dashed var(--input-border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.chip-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.chip-menu > summary:hover {
+  background: var(--surface-sunken);
+}
+.chip-on > summary {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.chip-on > summary b {
+  font-weight: 600;
+}
+.menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.14);
+}
+.list-controls > .chip-menu:last-child .menu {
+  left: auto;
+  right: 0;
+}
+.menu-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.menu-option:hover {
+  background: var(--surface-sunken);
+}
+.menu-option input {
+  accent-color: var(--accent-strong);
+}
+.menu-clear,
+.chip-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.menu-clear {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  text-align: left;
+}
+.view-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+.view-select select,
+.selection-bar select {
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.selection-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  z-index: 15;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  box-shadow: 0 12px 36px rgba(16, 24, 40, 0.18);
+}
+.selection-bar .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.selection-bar select:disabled {
+  color: var(--text-subtle);
 }

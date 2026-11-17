@@ -4,6 +4,7 @@
  * the single rejection path from ADR 0006: screens do not handle write errors themselves.
  */
 import type { Stage, StatusCategory, WorkItem } from '@wm/shared'
+import { NO_FACETS, facetCount, matchesFacets, type Facets } from './list-view'
 
 type Listener = () => void
 export type CategoryFilter = 'all' | StatusCategory
@@ -151,18 +152,30 @@ export class ItemStore {
   }
 
   private teamFilter: string | null = null
+  private facets: Facets = NO_FACETS
+
+  /** Chip filters (owner, priority, kind, stage). Keeps the search and status filters. */
+  setFacets(facets: Facets): void {
+    this.facets = facets
+    this.applyFilter(this.viewSnapshot.query, this.viewSnapshot.category)
+  }
+
+  getFacets = (): Facets => this.facets
 
   applyFilter(query: string, category: CategoryFilter): void {
     const start = performance.now()
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
     const teamId = this.teamFilter
+    const facets = this.facets
+    const anyFacet = facetCount(facets) > 0
     const ids =
-      terms.length === 0 && category === 'all' && teamId === null
+      terms.length === 0 && category === 'all' && teamId === null && !anyFacet
         ? this.allIds
         : this.allIds.filter((id) => {
             const item = this.items.get(id)
             if (teamId !== null && item?.teamId !== teamId) return false
             if (category !== 'all' && item?.statusCategory !== category) return false
+            if (anyFacet && (!item || !matchesFacets(item, facets))) return false
             const text = this.haystack.get(id) ?? ''
             return terms.every((term) => text.includes(term))
           })
@@ -180,16 +193,53 @@ export class ItemStore {
   // --- writes ------------------------------------------------------------------------------
   /** Apply a change locally right away, then send it. A refusal reverts it with a toast. */
   mutate(id: string, patch: ItemPatch): void {
+    void this.apply(id, patch, false)
+  }
+
+  /**
+   * One change to many items (bulk actions): applied at once, sent one by one through the
+   * same checks, then one message with one Undo for all of them. Refused items are reverted
+   * and counted in the message.
+   */
+  async mutateMany(ids: readonly string[], patch: ItemPatch, done: string): Promise<void> {
+    const sent = ids.map((id) => this.apply(id, patch, true)).filter((s) => s !== null)
+    const results = await Promise.all(sent.map((s) => s.result))
+    const changes = sent.filter((_, i) => results[i] === null).map((s) => s.change)
+    const refused = results.filter((r): r is string => r !== null)
+    const reason = refused[0]
+    if (changes.length > 0) {
+      const n = changes.length
+      const message = `${done.replace('{items}', n === 1 ? '1 item' : `${n} items`)}${
+        refused.length ? ` ${refused.length} could not be changed: ${reason}.` : ''
+      }`
+      this.toast(message, {
+        label: 'Undo',
+        run: () => {
+          for (const change of changes) this.undoChange(change, true)
+          this.toast(`Undone for ${changes.length} item${changes.length === 1 ? '' : 's'}.`)
+        },
+      })
+    } else if (reason) {
+      this.toast(`Nothing was changed: ${reason}.`)
+    }
+  }
+
+  /** Apply locally, send, and report null (saved) or the reason it was refused. */
+  private apply(
+    id: string,
+    patch: ItemPatch,
+    quiet: boolean,
+  ): { change: Change; result: Promise<string | null> } | null {
     const before = this.items.get(id)
-    if (!before) return
+    if (!before) return null
     const after = this.applyPatch(before, patch)
     this.setItem(after)
     const change: Change = { id, before, after }
-    const announce = !this.undoing
+    const announce = !this.undoing && !quiet
     this.undoStack.push(change)
     if (this.undoStack.length > 50) this.undoStack.shift()
 
-    this.save(before, patch).then(
+    const result = this.save(before, patch).then(
       (saved) => {
         if (patch.statusId !== undefined && patch.statusId !== before.statusId && announce) {
           const name = this.stages.get(`${before.teamId}:${patch.statusId}`)?.name ?? patch.statusId
@@ -201,15 +251,18 @@ export class ItemStore {
         // The server has the last word (for example, a hand-over may clear the owner),
         // unless a newer local change has replaced this one in the meantime.
         if (saved && this.items.get(id) === after) this.setItem(saved)
+        return null
       },
       (error: unknown) => {
         this.undoStack = this.undoStack.filter((c) => c !== change)
         // Only revert if nothing newer has replaced this write.
         if (this.items.get(id) === after) this.setItem(before)
         const reason = error instanceof Error ? error.message : 'the server rejected that change'
-        this.toast(`${before.key}: ${reason}. The change was reverted.`)
+        if (!quiet) this.toast(`${before.key}: ${reason}. The change was reverted.`)
+        return reason
       },
     )
+    return { change, result }
   }
 
   /** Undo the last change by sending the previous values as a new change. */
@@ -222,7 +275,7 @@ export class ItemStore {
   private undoing = false
   private readonly undone = new WeakSet<Change>()
 
-  private undoChange(change: Change): void {
+  private undoChange(change: Change, quiet = false): void {
     if (this.undone.has(change)) return
     this.undone.add(change)
     this.undoStack = this.undoStack.filter((c) => c !== change)
@@ -238,7 +291,7 @@ export class ItemStore {
     this.mutate(change.id, patch)
     this.undoing = false
     this.undoStack.pop() // the undo itself is not something to undo
-    this.toast(`${before.key}: change undone.`)
+    if (!quiet) this.toast(`${before.key}: change undone.`)
   }
 
   toast(message: string, action?: ToastAction): void {

@@ -95,6 +95,46 @@ describe('ItemStore', () => {
     expect(store.getView().total).toBe(1000)
   })
 
+  it('bulk change: one message, refusals reverted and counted, one Undo for the rest', async () => {
+    save.mockImplementation(async (item) => {
+      if (item.id === 'item-2') throw new Error('you can only change items in your own teams')
+    })
+    const before = ['item-1', 'item-2', 'item-3'].map((id) => store.getItem(id)!.assigneeId)
+    await store.mutateMany(
+      ['item-1', 'item-2', 'item-3'],
+      { assigneeId: 'user-9' },
+      'Assigned {items}.',
+    )
+    expect(store.getItem('item-1')?.assigneeId).toBe('user-9')
+    expect(store.getItem('item-2')?.assigneeId).toBe(before[1])
+    const toasts = store.getToasts()
+    expect(toasts).toHaveLength(1)
+    expect(toasts[0]!.message).toBe(
+      'Assigned 2 items. 1 could not be changed: you can only change items in your own teams.',
+    )
+    toasts[0]!.action!.run()
+    expect(store.getItem('item-1')?.assigneeId).toBe(before[0])
+    expect(store.getItem('item-3')?.assigneeId).toBe(before[2])
+  })
+
+  it('chip filters combine with search and status', () => {
+    const owner = store.getItem('item-1')!.assigneeId
+    store.setFacets({ owners: [owner] })
+    const view = store.getView()
+    expect(view.ids.length).toBeGreaterThan(0)
+    expect(view.ids.every((id) => store.getItem(id)?.assigneeId === owner)).toBe(true)
+    store.applyFilter('', 'done')
+    expect(
+      store.getView().ids.every((id) => {
+        const item = store.getItem(id)
+        return item?.assigneeId === owner && item.statusCategory === 'done'
+      }),
+    ).toBe(true)
+    store.setFacets({})
+    store.applyFilter('', 'all')
+    expect(store.getView().ids).toHaveLength(1000)
+  })
+
   it('a team filter narrows the list and keeps the other filters', () => {
     const team = store.getItem('item-1')!.teamId
     store.setTeam(team)
