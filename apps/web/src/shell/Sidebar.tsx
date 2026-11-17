@@ -14,6 +14,7 @@ import {
   SquareKanban,
   Sun,
   UserRound,
+  Users,
 } from 'lucide-react'
 import type { ApiTeam, ApiUser, Me } from '../items/api'
 import type { Route } from '../items/item-model'
@@ -133,6 +134,7 @@ export function Sidebar({
           icon={icon(LayoutGrid)}
           label="All teams"
         />
+        <NavLink href="#/people" current={page === 'people'} icon={icon(Users)} label="People" />
       </div>
 
       <div className="nav-group">
