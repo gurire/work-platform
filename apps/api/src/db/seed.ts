@@ -1,4 +1,5 @@
 import { generateSampleWorkItems, SAMPLE_USERS } from '@wm/shared'
+import { seedFlowHistory } from './seed-flow.js'
 import type { Db, Queryable } from './db.js'
 
 /**
@@ -215,6 +216,20 @@ export async function seedDevData(db: Db, itemCount = 2000, pipelineCount = 300)
   await db.exec(`UPDATE stage_history h
     SET entered_at = now() - make_interval(hours => (substring(w.key from 6)::int * 7) % 200)
     FROM work_items w WHERE w.id = h.item_id AND w.team_id = 'DATA'`)
+  // Nine weeks of believable history for the dashboards, and waiting targets on every team.
+  await db.exec(`UPDATE stages SET target_hours = 48 WHERE key = 'in_review' AND team_id <> 'DATA'`)
+  await db.exec(
+    `UPDATE stages SET target_hours = 120 WHERE key = 'in_progress' AND team_id <> 'DATA'`,
+  )
+  await db.exec(`UPDATE stages SET target_hours = 96 WHERE team_id = 'DATA' AND key = 'processing'`)
+  // Validation and client review are DATA's review stages (specs/dashboards.md, section 4).
+  await db.exec(`UPDATE stages SET kind = 'review'
+    WHERE team_id = 'DATA' AND key IN ('validation', 'client_review')`)
+  await seedFlowHistory(db)
+  // An item was created when it first entered a stage, so "Created" matches its history.
+  await db.exec(`UPDATE work_items w SET created_at = h.first_entered
+    FROM (SELECT item_id, min(entered_at) AS first_entered FROM stage_history GROUP BY item_id) h
+    WHERE h.item_id = w.id`)
   await db.exec('COMMIT')
 }
 

@@ -1,5 +1,8 @@
 import type {
+  HealthStatus,
   InboxKind,
+  StageKind,
+  Trend,
   RecordType,
   RecordValue,
   RoundState,
@@ -240,6 +243,70 @@ function explain(
  * Talks to the API through the Vite dev proxy (/api). `getUser` supplies the development
  * sign-in header; real sign-in replaces this later.
  */
+export interface TeamDashboard {
+  readonly team: { readonly id: string; readonly name: string }
+  readonly computedAt: string
+  readonly week: string
+  readonly stages: readonly {
+    readonly key: string
+    readonly name: string
+    readonly category: Stage['category']
+    readonly kind: StageKind | null
+    readonly kindSet: boolean
+    readonly targetHours: number | null
+  }[]
+  readonly headline: {
+    readonly open: number
+    readonly finishedThisWeek: number
+    readonly cycle85: number | null
+    readonly pastTarget: number
+  }
+  readonly flow: {
+    readonly days: readonly string[]
+    readonly series: readonly { readonly stageKey: string; readonly counts: readonly number[] }[]
+  }
+  readonly ageing: readonly {
+    readonly key: string
+    readonly title: string
+    readonly stageKey: string
+    readonly ageDays: number
+    readonly waitingHours: number
+    readonly pastTarget: boolean
+  }[]
+  readonly cycle: readonly {
+    readonly key: string
+    readonly title: string
+    readonly finishedAt: string
+    readonly days: number
+  }[]
+  readonly throughput: readonly { readonly week: string; readonly count: number }[]
+  readonly forecastBasis: readonly number[]
+  readonly remainingOpen: number
+  readonly workload: readonly {
+    readonly assigneeId: string | null
+    readonly counts: Readonly<Record<string, number>>
+  }[]
+}
+
+export interface TeamHealth {
+  readonly team: { readonly id: string; readonly name: string }
+  readonly status: HealthStatus
+  readonly cycle85: number | null
+  readonly cycleTrend: Trend
+  readonly donePerWeek: number
+  readonly doneTrend: Trend
+  readonly pastTarget: number
+  readonly open: number
+  readonly reviewRounds: number | null
+  readonly stuck: Partial<Record<StageKind, number | null>>
+}
+
+export interface TeamsDashboard {
+  readonly computedAt: string
+  readonly kinds: readonly StageKind[]
+  readonly teams: readonly TeamHealth[]
+}
+
 export function createApi(getUser: () => string) {
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     let response: Response
@@ -350,6 +417,9 @@ export function createApi(getUser: () => string) {
         `/teams/${encodeURIComponent(teamId)}/stages/${encodeURIComponent(stageKey)}/limits`,
         { method: 'PUT', body: JSON.stringify({ itemLimit, targetHours }) },
       ),
+    dashboard: (teamId: string) =>
+      request<TeamDashboard>(`/teams/${encodeURIComponent(teamId)}/dashboard`),
+    dashboards: () => request<TeamsDashboard>('/dashboards/teams'),
     itemRecord: (id: string) => request<ItemRecord>(`/items/${encodeURIComponent(id)}/record`),
     linkRecord: (id: string, recordId: string | null) =>
       request<{ item: WorkItem | null }>(`/items/${encodeURIComponent(id)}`, {

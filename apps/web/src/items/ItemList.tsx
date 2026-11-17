@@ -2,9 +2,10 @@ import { memo, useEffect, useRef, useSyncExternalStore } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { SAMPLE_PRIORITIES } from '@wm/shared'
 import type { ItemStore } from './store'
+import { Avatar, KindIcon, PriorityIcon, StageChip, type StageLook } from '../ui/kit'
 
 export type Density = 'compact' | 'default' | 'comfortable'
-export const ROW_HEIGHT: Record<Density, number> = { compact: 28, default: 34, comfortable: 42 }
+export const ROW_HEIGHT: Record<Density, number> = { compact: 30, default: 36, comfortable: 44 }
 
 interface RowProps {
   store: ItemStore
@@ -14,7 +15,7 @@ interface RowProps {
   top: number
   height: number
   userNames: ReadonlyMap<string, string>
-  stageNames: ReadonlyMap<string, string>
+  stageLooks: ReadonlyMap<string, StageLook>
   onSelect: (index: number) => void
 }
 
@@ -27,7 +28,7 @@ const Row = memo(function Row({
   top,
   height,
   userNames,
-  stageNames,
+  stageLooks,
   onSelect,
 }: RowProps) {
   const item = useSyncExternalStore(
@@ -47,23 +48,37 @@ const Row = memo(function Row({
       onClick={() => onSelect(index)}
     >
       <span role="gridcell" className="cell cell-key">
+        <KindIcon kind={item.kind} />
         {item.key}
       </span>
       <span role="gridcell" className="cell cell-title">
         {item.title}
       </span>
-      <span role="gridcell" className="cell cell-kind">
-        {item.kind}
-      </span>
-      <span role="gridcell" className={`cell cell-status status-${item.statusCategory}`}>
-        <span className="status-dot" aria-hidden="true" />
-        {stageNames.get(`${item.teamId}:${item.statusId}`) ?? item.statusId}
+      <span role="gridcell" className="cell cell-status">
+        <StageChip
+          look={
+            stageLooks.get(`${item.teamId}:${item.statusId}`) ?? {
+              name: item.statusId,
+              fraction: 0,
+              state: 'open',
+            }
+          }
+        />
       </span>
       <span role="gridcell" className="cell cell-priority">
+        <PriorityIcon level={priority} />
         {SAMPLE_PRIORITIES[priority] ?? 'None'}
       </span>
       <span role="gridcell" className="cell cell-assignee">
-        {item.assigneeId ? (userNames.get(item.assigneeId) ?? item.assigneeId) : 'Unassigned'}
+        <span className="person">
+          <Avatar
+            name={item.assigneeId ? (userNames.get(item.assigneeId) ?? item.assigneeId) : null}
+            id={item.assigneeId}
+          />
+          <span>
+            {item.assigneeId ? (userNames.get(item.assigneeId) ?? item.assigneeId) : 'Unassigned'}
+          </span>
+        </span>
       </span>
     </div>
   )
@@ -75,7 +90,7 @@ interface ItemListProps {
   cursor: number
   density: Density
   userNames: ReadonlyMap<string, string>
-  stageNames: ReadonlyMap<string, string>
+  stageLooks: ReadonlyMap<string, StageLook>
   onSelect: (index: number) => void
   onRenderedRows: (count: number) => void
 }
@@ -86,7 +101,7 @@ export function ItemList({
   cursor,
   density,
   userNames,
-  stageNames,
+  stageLooks,
   onSelect,
   onRenderedRows,
 }: ItemListProps) {
@@ -135,7 +150,7 @@ export function ItemList({
               top={row.start}
               height={height}
               userNames={userNames}
-              stageNames={stageNames}
+              stageLooks={stageLooks}
               onSelect={onSelect}
             />
           )

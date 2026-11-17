@@ -151,3 +151,29 @@ item and mark it read.
 
 The sample data gives Chen Wei (the default sign-in) a few inbox entries to start with. If you
 ran the app before comments were added, delete `apps/api/.data` once.
+
+## Look and feel settings
+
+- **Single-key shortcuts** (J, K, S, A, P and so on) can be turned off from the command
+  palette (Ctrl K → "Turn off single-key shortcuts"). Ctrl K, Escape, arrows and Enter keep
+  working. The choice is remembered in this browser.
+- **Speed readout** (the developer footer with timings) is hidden by default. Add `?hud` to
+  the address, or run "Show speed readout" from the command palette.
+- After moving an item to another stage, the message at the bottom offers **Undo**.
+
+## Dashboards
+
+- **Team dashboard:** the Dashboard button, or `#/dashboard/DATA` in the address. Cumulative
+  flow, time in stage against target, cycle time spread, finished per week, a forecast and
+  workload. Every chart has "Show as table".
+- **All teams:** `#/dashboards`, or "All teams" on a team dashboard. Team health and where work
+  is stuck. You only see teams you can open.
+- The sample data includes about three months of made-up stage history, so the charts have
+  something to show. Definitions are in `specs/dashboards.md` (draft).
+
+## Finding your way around
+
+- The **sidebar** has My work (`#/me`), Inbox, All items, All teams, and each team. The team
+  you are in opens to show its List (`#/team/DATA`), Board and Dashboard.
+- **Dev sign-in** ("act as") moved to the bottom of the sidebar. It is for local development
+  only and goes away when real sign-in arrives.

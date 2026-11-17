@@ -2,16 +2,31 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { allowedDestinations, SAMPLE_PRIORITIES } from '@wm/shared'
 import { createApi, type ApiTeam, type ApiUser, type Me } from './api'
 import { CommandPalette, type Command } from './CommandPalette'
-import { boardHash, itemHash, parseRoute, recordHash, type Route } from './item-model'
+import {
+  boardHash,
+  dashboardHash,
+  itemHash,
+  parseRoute,
+  recordHash,
+  type Route,
+} from './item-model'
 import { Board } from './Board'
 import { Inbox } from './Inbox'
 import type { InboxEntry } from './api'
 import { ItemPage } from './ItemPage'
 import { RecordPage } from './RecordPage'
 import { ItemList, type Density } from './ItemList'
+import { stageLook } from '../ui/kit'
 import { measureInteraction, perfStore } from './perf'
 import { ItemStore, type CategoryFilter, type ItemPatch } from './store'
 import './items.css'
+import '../dashboards/dashboards.css'
+import { TeamDashboard } from '../dashboards/TeamDashboard'
+import { AllTeams } from '../dashboards/AllTeams'
+import { Sidebar } from '../shell/Sidebar'
+import { MyWork } from '../shell/MyWork'
+import '../shell/shell.css'
+import { TeamTile } from '../ui/kit'
 
 const DENSITIES: readonly Density[] = ['compact', 'default', 'comfortable']
 const CATEGORIES: readonly { id: CategoryFilter; label: string }[] = [
@@ -47,6 +62,12 @@ export function ItemsScreen() {
   const perf = useSyncExternalStore(perfStore.subscribe, perfStore.get)
   const [cursor, setCursor] = useState(0)
   const [density, setDensity] = useState<Density>('default')
+  // WCAG 2.1.4: single-key shortcuts can be turned off; remembered on this computer.
+  const [singleKeys, setSingleKeys] = useState(() => readSetting('wm.singleKeys') !== 'off')
+  // The speed readout is for developers: add ?hud to the address, or run "Show speed readout".
+  const [showHud, setShowHud] = useState(
+    () => new URLSearchParams(window.location.search).has('hud') || readSetting('wm.hud') === 'on',
+  )
   const [theme, setTheme] = useState<Theme>(() =>
     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
   )
@@ -124,11 +145,13 @@ export function ItemsScreen() {
   }, [userId])
 
   const userNames = useMemo(() => new Map(users.map((u) => [u.id, u.name])), [users])
-  const stageNames = useMemo(
+  const stageLooks = useMemo(
     () =>
       new Map(
         teams.flatMap((team) =>
-          team.stages.map((stage) => [`${stage.teamId}:${stage.key}`, stage.name] as const),
+          team.stages.map(
+            (stage) => [`${stage.teamId}:${stage.key}`, stageLook(team.stages, stage.key)] as const,
+          ),
         ),
       ),
     [teams],
@@ -138,6 +161,42 @@ export function ItemsScreen() {
     () => (currentId ? store.getItem(currentId) : undefined),
   )
   const currentTeam = teams.find((team) => team.id === currentItem?.teamId)
+  const routeTeamId =
+    route.page === 'list' || route.page === 'board' || route.page === 'dashboard'
+      ? (route.teamId ?? null)
+      : null
+  const pageTeam = teams.find((team) => team.id === routeTeamId)
+  const pageTitle =
+    route.page === 'me'
+      ? 'My work'
+      : route.page === 'inbox'
+        ? 'Inbox'
+        : route.page === 'dashboards'
+          ? 'All teams'
+          : route.page === 'item'
+            ? (currentItem?.key ?? route.key)
+            : route.page === 'record'
+              ? 'Record'
+              : pageTeam
+                ? `${pageTeam.name}${route.page === 'board' ? ' · Board' : route.page === 'dashboard' ? ' · Dashboard' : ''}`
+                : 'All items'
+  const revision = useSyncExternalStore(store.subscribeChanges, store.getRevision)
+  const myOpen = useMemo(() => {
+    void revision
+    if (!me) return 0
+    return teams
+      .flatMap((team) => store.itemsForTeam(team.id))
+      .filter(
+        (item) =>
+          item.assigneeId === me.id &&
+          (item.statusCategory === 'todo' || item.statusCategory === 'in_progress'),
+      ).length
+  }, [store, me, teams, revision])
+
+  // A team's list (#/team/KEY) shows only that team; the plain list shows every team.
+  useEffect(() => {
+    if (route.page === 'list') store.setTeam(route.teamId ?? null)
+  }, [route, store])
 
   const edit = useCallback(
     (label: string, patch: ItemPatch) => {
@@ -187,6 +246,9 @@ export function ItemsScreen() {
   }, [refreshInbox])
   const openBoard = useCallback((teamId: string) => {
     window.location.hash = boardHash(teamId)
+  }, [])
+  const openDashboard = useCallback((teamId: string | null) => {
+    window.location.hash = dashboardHash(teamId)
   }, [])
   const openRecord = useCallback((id: string) => {
     window.location.hash = recordHash(id)
@@ -281,12 +343,47 @@ export function ItemsScreen() {
         run: cycleDensity,
       },
       {
+        id: 'single-keys',
+        group: 'View',
+        label: singleKeys ? 'Turn off single-key shortcuts' : 'Turn on single-key shortcuts',
+        run: () => {
+          writeSetting('wm.singleKeys', singleKeys ? 'off' : 'on')
+          setSingleKeys(!singleKeys)
+          store.toast(
+            singleKeys
+              ? 'Single-key shortcuts are off. Ctrl K still works.'
+              : 'Single-key shortcuts are on.',
+          )
+        },
+      },
+      {
+        id: 'hud',
+        group: 'View',
+        label: showHud ? 'Hide speed readout' : 'Show speed readout',
+        run: () => {
+          writeSetting('wm.hud', showHud ? 'off' : 'on')
+          setShowHud(!showHud)
+        },
+      },
+      {
         id: 'filter',
         group: 'View',
         label: 'Focus filter',
         shortcut: '/',
         run: () => filterRef.current?.focus(),
       },
+      {
+        id: 'dashboards',
+        group: 'Dashboards',
+        label: 'All teams',
+        run: () => openDashboard(null),
+      },
+      ...teams.map((t) => ({
+        id: `dashboard-${t.id}`,
+        group: 'Dashboards',
+        label: `${t.name} dashboard`,
+        run: () => openDashboard(t.id),
+      })),
       ...teams.map((t) => ({
         id: `board-${t.id}`,
         group: 'Open board',
@@ -300,7 +397,21 @@ export function ItemsScreen() {
         run: () => setUserId(u.id),
       })),
     ]
-  }, [palette, edit, toggleTheme, cycleDensity, users, currentTeam, currentItem, teams, openBoard])
+  }, [
+    palette,
+    edit,
+    toggleTheme,
+    cycleDensity,
+    users,
+    currentTeam,
+    currentItem,
+    teams,
+    openBoard,
+    openDashboard,
+    singleKeys,
+    showHud,
+    store,
+  ])
 
   const dynamicCommands = useCallback(
     (query: string): Command[] => {
@@ -332,7 +443,14 @@ export function ItemsScreen() {
         return
       }
       if (mod || event.altKey) return
-      if (route.page === 'inbox') {
+      // Letters and symbols are single-key shortcuts; Escape, arrows and Enter always work.
+      if (!singleKeys && event.key.length === 1) return
+      if (
+        route.page === 'inbox' ||
+        route.page === 'me' ||
+        route.page === 'dashboard' ||
+        route.page === 'dashboards'
+      ) {
         if (event.key === 'Escape') {
           event.preventDefault()
           backToList()
@@ -420,210 +538,234 @@ export function ItemsScreen() {
     teams,
     openBoard,
     openInbox,
+    singleKeys,
   ])
 
   const onSelect = useCallback((index: number) => setCursor(index), [])
 
   return (
-    <div className={`shell density-${density}`}>
-      <header className="toolbar">
-        <strong className="brand">Work Platform</strong>
-        <label className="muted dev-user">
-          Dev sign-in
-          <select
-            value={userId}
-            onChange={(event) => setUserId(event.target.value)}
-            aria-label="Development sign-in: act as"
-          >
-            {users.length === 0 && <option value={userId}>{userId}</option>}
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {route.page === 'list' && (
-          <div className="tabs" role="tablist" aria-label="Status filter">
-            {CATEGORIES.map((category) => (
-              <button
-                key={category.id}
-                role="tab"
-                aria-selected={view.category === category.id}
-                className={view.category === category.id ? 'tab tab-active' : 'tab'}
-                onClick={(event) => {
-                  store.applyFilter(view.query, category.id)
-                  setCursor(0)
-                  measureInteraction('Filter', event.timeStamp)
-                }}
-              >
-                {category.label}
-              </button>
-            ))}
-          </div>
-        )}
-        {route.page === 'list' && (
-          <input
-            ref={filterRef}
-            className="filter"
-            type="search"
-            aria-label="Filter items"
-            placeholder="Filter by key or title  ( / )"
-            value={view.query}
-            onChange={(event) => {
-              store.applyFilter(event.target.value, view.category)
-              setCursor(0)
-              measureInteraction('Filter', event.nativeEvent.timeStamp)
-            }}
-          />
-        )}
-        {route.page !== 'inbox' && (
-          <button className="button" onClick={openInbox}>
-            Inbox
-            {inbox && inbox.unread > 0 && <span className="badge-count">{inbox.unread}</span>}{' '}
-            <kbd>I</kbd>
+    <div className="app">
+      <Sidebar
+        route={route}
+        activeTeamId={pageTeam?.id ?? currentTeam?.id ?? null}
+        teams={teams}
+        users={users}
+        me={me}
+        userId={userId}
+        unread={inbox?.unread ?? 0}
+        myOpen={myOpen}
+        onSignIn={setUserId}
+        onCommands={() => setPalette('all')}
+      />
+      <div className={`shell density-${density}`}>
+        <header className="toolbar">
+          <span className="page-title">
+            {pageTeam && <TeamTile id={pageTeam.id} name={pageTeam.name} size={20} />}
+            {pageTitle}
+          </span>
+          {route.page === 'list' && (
+            <div className="tabs" role="tablist" aria-label="Status filter">
+              {CATEGORIES.map((category) => (
+                <button
+                  key={category.id}
+                  role="tab"
+                  aria-selected={view.category === category.id}
+                  className={view.category === category.id ? 'tab tab-active' : 'tab'}
+                  onClick={(event) => {
+                    store.applyFilter(view.query, category.id)
+                    setCursor(0)
+                    measureInteraction('Filter', event.timeStamp)
+                  }}
+                >
+                  {category.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {route.page === 'list' && (
+            <input
+              ref={filterRef}
+              className="filter"
+              type="search"
+              aria-label="Filter items"
+              placeholder="Filter by key or title  ( / )"
+              value={view.query}
+              onChange={(event) => {
+                store.applyFilter(event.target.value, view.category)
+                setCursor(0)
+                measureInteraction('Filter', event.nativeEvent.timeStamp)
+              }}
+            />
+          )}
+          <button className="button toolbar-end" onClick={() => setPalette('all')}>
+            Commands <kbd>Ctrl K</kbd>
           </button>
-        )}
-        {route.page !== 'board' && (
-          <button
-            className="button"
-            onClick={() => {
-              const teamId = currentTeam?.id ?? teams[0]?.id
-              if (teamId) openBoard(teamId)
-            }}
-          >
-            Board <kbd>B</kbd>
-          </button>
-        )}
-        {route.page !== 'list' && (
-          <button className="button" onClick={backToList}>
-            List
-          </button>
-        )}
-        <button className="button" onClick={() => setPalette('all')}>
-          Commands <kbd>Ctrl K</kbd>
-        </button>
-      </header>
+        </header>
 
-      {route.page === 'item' ? (
-        <ItemPage
-          api={api}
-          store={store}
-          itemKey={route.key}
-          me={me}
-          teams={teams}
-          users={users}
-          positionLabel={routeIndex >= 0 ? `Item ${routeIndex + 1} of ${ids.length}` : null}
-          onBack={backToList}
-          onOpenRecord={openRecord}
-        />
-      ) : route.page === 'inbox' ? (
-        <Inbox
-          entries={inbox?.entries ?? null}
-          users={users}
-          onOpen={openInboxEntry}
-          onMarkAllRead={markAllRead}
-        />
-      ) : route.page === 'board' ? (
-        <Board
-          key={route.teamId}
-          api={api}
-          store={store}
-          teamId={route.teamId}
-          teams={teams}
-          users={users}
-          me={me}
-          onOpenItem={openItem}
-          onTeamChange={openBoard}
-        />
-      ) : route.page === 'record' ? (
-        <RecordPage
-          api={api}
-          store={store}
-          recordId={route.id}
-          users={users}
-          teams={teams}
-          onBack={backFromRecord}
-          onOpenItem={openItem}
-        />
-      ) : (
-        <>
-          <div className="columns" aria-hidden="true">
-            <span className="cell cell-key">Key</span>
-            <span className="cell cell-title">Title</span>
-            <span className="cell cell-kind">Kind</span>
-            <span className="cell cell-status">Stage</span>
-            <span className="cell cell-priority">Priority</span>
-            <span className="cell cell-assignee">Assignee</span>
-          </div>
-
-          <ItemList
+        {route.page === 'item' ? (
+          <ItemPage
+            api={api}
             store={store}
-            ids={ids}
-            cursor={safeCursor}
-            density={density}
-            userNames={userNames}
-            stageNames={stageNames}
-            onSelect={onSelect}
-            onRenderedRows={setRenderedRows}
+            itemKey={route.key}
+            me={me}
+            teams={teams}
+            users={users}
+            positionLabel={routeIndex >= 0 ? `Item ${routeIndex + 1} of ${ids.length}` : null}
+            onBack={backToList}
+            onOpenRecord={openRecord}
           />
+        ) : route.page === 'me' ? (
+          <MyWork
+            store={store}
+            me={me}
+            teams={teams}
+            users={users}
+            inbox={inbox?.entries ?? null}
+          />
+        ) : route.page === 'dashboard' ? (
+          <TeamDashboard
+            key={route.teamId}
+            api={api}
+            teamId={route.teamId}
+            teams={teams}
+            users={users}
+            onOpenItem={openItem}
+            onTeamChange={openDashboard}
+            onOpenAllTeams={() => openDashboard(null)}
+          />
+        ) : route.page === 'dashboards' ? (
+          <AllTeams api={api} onOpenTeam={openDashboard} />
+        ) : route.page === 'inbox' ? (
+          <Inbox
+            entries={inbox?.entries ?? null}
+            users={users}
+            onOpen={openInboxEntry}
+            onMarkAllRead={markAllRead}
+          />
+        ) : route.page === 'board' ? (
+          <Board
+            key={route.teamId}
+            api={api}
+            store={store}
+            teamId={route.teamId}
+            teams={teams}
+            users={users}
+            me={me}
+            onOpenItem={openItem}
+            onTeamChange={openBoard}
+          />
+        ) : route.page === 'record' ? (
+          <RecordPage
+            api={api}
+            store={store}
+            recordId={route.id}
+            users={users}
+            teams={teams}
+            onBack={backFromRecord}
+            onOpenItem={openItem}
+          />
+        ) : (
+          <>
+            <div className="columns" aria-hidden="true">
+              <span className="cell cell-key">Key</span>
+              <span className="cell cell-title">Title</span>
+              <span className="cell cell-status">Stage</span>
+              <span className="cell cell-priority">Priority</span>
+              <span className="cell cell-assignee">Assignee</span>
+            </div>
 
-          <footer className="hud" aria-label="Performance readout">
-            <span>
-              {ids.length.toLocaleString()} of {view.total.toLocaleString()} items
-            </span>
-            <span>{renderedRows} rows in DOM</span>
-            <span className={load.status === 'error' ? 'hud-bad' : undefined}>
-              {load.status === 'loading' && 'loading…'}
-              {load.status === 'ready' && `loaded in ${load.ms.toFixed(0)} ms`}
-              {load.status === 'error' && `could not load: ${load.message}`}
-            </span>
-            {me && (
-              <span>
-                {me.name} · {me.orgRole.replace('_', ' ')} · teams:{' '}
-                {Object.keys(me.teams).join(', ') || 'none'}
-              </span>
+            <ItemList
+              store={store}
+              ids={ids}
+              cursor={safeCursor}
+              density={density}
+              userNames={userNames}
+              stageLooks={stageLooks}
+              onSelect={onSelect}
+              onRenderedRows={setRenderedRows}
+            />
+
+            {showHud && (
+              <footer className="hud" aria-label="Performance readout">
+                <span>
+                  {ids.length.toLocaleString()} of {view.total.toLocaleString()} items
+                </span>
+                <span>{renderedRows} rows in DOM</span>
+                <span className={load.status === 'error' ? 'hud-bad' : undefined}>
+                  {load.status === 'loading' && 'loading…'}
+                  {load.status === 'ready' && `loaded in ${load.ms.toFixed(0)} ms`}
+                  {load.status === 'error' && `could not load: ${load.message}`}
+                </span>
+                {me && (
+                  <span>
+                    {me.name} · {me.orgRole.replace('_', ' ')} · teams:{' '}
+                    {Object.keys(me.teams).join(', ') || 'none'}
+                  </span>
+                )}
+                <span>filter {view.filterMs.toFixed(1)} ms</span>
+                {perf.map((stat) => (
+                  <span key={stat.label} className={stat.p95 > 100 ? 'hud-bad' : 'hud-good'}>
+                    {stat.label}: last {stat.last.toFixed(0)} · p50 {stat.p50.toFixed(0)} · p95{' '}
+                    {stat.p95.toFixed(0)} ms ({stat.count})
+                  </span>
+                ))}
+                <span className="muted">
+                  J/K move · Enter open · I inbox · B board · S stage · A owner · P priority · D
+                  density · T theme · Ctrl Z undo
+                </span>
+              </footer>
             )}
-            <span>filter {view.filterMs.toFixed(1)} ms</span>
-            {perf.map((stat) => (
-              <span key={stat.label} className={stat.p95 > 100 ? 'hud-bad' : 'hud-good'}>
-                {stat.label}: last {stat.last.toFixed(0)} · p50 {stat.p50.toFixed(0)} · p95{' '}
-                {stat.p95.toFixed(0)} ms ({stat.count})
-              </span>
-            ))}
-            <span className="muted">
-              J/K move · Enter open · I inbox · B board · S stage · A owner · P priority · D density
-              · T theme · Ctrl Z undo
-            </span>
-          </footer>
-        </>
-      )}
+          </>
+        )}
 
-      <div className="toasts" role="status" aria-live="polite">
-        {toasts.map((toast) => (
-          <div key={toast.id} className="toast">
-            {toast.message}
-          </div>
-        ))}
+        <div className="toasts" role="status" aria-live="polite">
+          {toasts.map((toast) => (
+            <div key={toast.id} className="toast">
+              <span>{toast.message}</span>
+              {toast.action && (
+                <button type="button" className="toast-action" onClick={toast.action.run}>
+                  {toast.action.label}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {palette && (
+          <CommandPalette
+            key={palette}
+            title={
+              palette === 'all'
+                ? 'Type a command or an item key (e.g. ENG-42)'
+                : palette === 'status'
+                  ? 'Move to stage'
+                  : palette === 'assignee'
+                    ? 'Assign to'
+                    : 'Set priority'
+            }
+            commands={commands}
+            dynamic={dynamicCommands}
+            onClose={() => setPalette(null)}
+          />
+        )}
       </div>
-
-      {palette && (
-        <CommandPalette
-          key={palette}
-          title={
-            palette === 'all'
-              ? 'Type a command or an item key (e.g. ENG-42)'
-              : palette === 'status'
-                ? 'Move to stage'
-                : palette === 'assignee'
-                  ? 'Assign to'
-                  : 'Set priority'
-          }
-          commands={commands}
-          dynamic={dynamicCommands}
-          onClose={() => setPalette(null)}
-        />
-      )}
     </div>
   )
+}
+
+/** Settings live in localStorage, which can be missing or throw (private windows). */
+function readSetting(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeSetting(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    // Not remembered; the change still applies until the page is reloaded.
+  }
 }

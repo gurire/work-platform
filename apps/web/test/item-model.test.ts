@@ -68,6 +68,14 @@ describe('routes', () => {
     expect(parseRoute('#/inbox')).toEqual({ page: 'inbox' })
     expect(itemHash('ENG-1')).toBe('#/item/ENG-1')
   })
+
+  it("opens My work, a team's list and dashboards", () => {
+    expect(parseRoute('#/me')).toEqual({ page: 'me' })
+    expect(parseRoute('#/team/DATA')).toEqual({ page: 'list', teamId: 'DATA' })
+    expect(parseRoute('#/team/../x')).toEqual({ page: 'list' })
+    expect(parseRoute('#/dashboard/DATA')).toEqual({ page: 'dashboard', teamId: 'DATA' })
+    expect(parseRoute('#/dashboards')).toEqual({ page: 'dashboards' })
+  })
 })
 
 describe('shortDuration', () => {
