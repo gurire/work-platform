@@ -190,6 +190,8 @@ function explain(
   body: { error?: string; missing?: string[]; field?: string },
 ): string {
   switch (body.error) {
+    case 'not_invited':
+      return 'you have not been invited to the Work Platform; ask an org admin'
     case 'end_stage':
       return 'done and cancelled stages cannot have limits'
     case 'invalid_limit':
@@ -318,8 +320,27 @@ export interface TeamsDashboard {
   readonly teams: readonly TeamHealth[]
 }
 
-export function createApi(getUser: () => string) {
+/**
+ * With `getToken`, calls carry the Cognito ID token (specs/sign-in.md) and an expired session
+ * sends the person to sign in again. Without it, development sign-in names the user.
+ */
+export function createApi(
+  getUser: () => string,
+  getToken?: () => Promise<string | null>,
+  onSignedOut?: () => void,
+) {
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    let identity: Record<string, string>
+    if (getToken) {
+      const token = await getToken()
+      if (!token) {
+        onSignedOut?.()
+        throw new Error('you are not signed in')
+      }
+      identity = { authorization: `Bearer ${token}` }
+    } else {
+      identity = { 'x-dev-user': getUser() }
+    }
     let response: Response
     try {
       response = await fetch(`/api${path}`, {
@@ -327,13 +348,14 @@ export function createApi(getUser: () => string) {
         headers: {
           // Only say the body is JSON when there is one; an empty JSON body is refused.
           ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}),
-          'x-dev-user': getUser(),
+          ...identity,
           ...init.headers,
         },
       })
     } catch {
       throw new Error('the server could not be reached')
     }
+    if (response.status === 401 && getToken) onSignedOut?.()
     if (!response.ok) {
       let body: { error?: string; missing?: string[]; field?: string } = {}
       try {

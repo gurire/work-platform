@@ -213,3 +213,9 @@ ran the app before comments were added, delete `apps/api/.data` once.
   work across the teams you can see: in progress, up next, urgent, and a bar split by team.
   Click a person to see their open items. It shows load, not speed, and never mentions a
   private team you are not in.
+
+## Sign-in
+
+- Without any Cognito settings (the normal local setup) nothing changes: the "Dev sign-in"
+  picker chooses who you are.
+- To try real sign-in against the Dev user pool, follow `docs/setup/sign-in.md`.

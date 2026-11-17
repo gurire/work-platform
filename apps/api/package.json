@@ -13,6 +13,7 @@
   "dependencies": {
     "@electric-sql/pglite": "^0.5.15",
     "@wm/shared": "workspace:*",
+    "aws-jwt-verify": "^5.2.1",
     "fastify": "^5.0.0"
   },
   "devDependencies": {

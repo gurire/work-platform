@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 import { WORK_ITEM_KINDS } from '@wm/shared'
 import type { Db } from './db/db.js'
+import { registerAuth, type IdTokenVerifier } from './auth.js'
 import { registerItemRoutes } from './routes/items.js'
 import { registerReviewRoutes } from './routes/reviews.js'
 import { registerRecordRoutes } from './routes/records.js'
@@ -17,6 +18,8 @@ export interface AppOptions {
   devAuth?: boolean
   /** Shared secret for signed code host events. Without it the webhook is off. */
   codeWebhookSecret?: string
+  /** Checks Cognito ID tokens (specs/sign-in.md). Without it, only development sign-in works. */
+  verifyIdToken?: IdTokenVerifier
 }
 
 export function buildApp(options: AppOptions = {}): FastifyInstance {
@@ -32,6 +35,7 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
   app.get('/meta/work-item-kinds', async () => ({ kinds: WORK_ITEM_KINDS }))
 
   if (options.db) {
+    if (options.verifyIdToken) registerAuth(app, options.db, options.verifyIdToken)
     registerItemRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerReviewRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerRecordRoutes(app, { db: options.db, devAuth: options.devAuth === true })

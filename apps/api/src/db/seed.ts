@@ -93,6 +93,11 @@ export async function seedDevData(db: Db, itemCount = 2000, pipelineCount = 300)
     "INSERT INTO team_members (team_id, user_id, role) VALUES ('SEC', 'user-2', 'admin')",
   )
 
+  // Made-up emails, so sign-in can be tried against a dev user pool (specs/sign-in.md).
+  await db.exec(
+    "UPDATE users SET email = lower(replace(name, ' ', '.')) || '@example.org' WHERE email IS NULL",
+  )
+
   // DATA is a made-up pipeline team: its own stages, and a hand-over clears the owner.
   await db.query(
     "INSERT INTO teams (id, key, name, is_private, hand_off_clears_owner) VALUES ('DATA', 'DATA', 'Data Pipeline', false, true)",

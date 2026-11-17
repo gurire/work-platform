@@ -13,6 +13,7 @@ import {
   Search,
   SquareKanban,
   Sun,
+  LogOut,
   UserRound,
   Users,
 } from 'lucide-react'
@@ -34,6 +35,9 @@ interface Props {
   onCommands: () => void
   themeChoice: ThemeChoice
   onThemeChoice: (choice: ThemeChoice) => void
+  /** Set when Cognito sign-in is on: the email, and how to sign out. */
+  signedInAs: string | null
+  onSignOut: (() => void) | null
 }
 
 const ROLE: Record<string, string> = { org_admin: 'Org admin', member: 'Member', viewer: 'Viewer' }
@@ -83,6 +87,8 @@ export function Sidebar({
   onCommands,
   themeChoice,
   onThemeChoice,
+  signedInAs,
+  onSignOut,
 }: Props) {
   const page = route.page
   const icon = (Icon: typeof Inbox) => <Icon size={16} aria-hidden="true" />
@@ -216,21 +222,32 @@ export function Sidebar({
             </button>
           ))}
         </div>
-        <label className="dev-user">
-          <span>Dev sign-in</span>
-          <select
-            value={userId}
-            onChange={(event) => onSignIn(event.target.value)}
-            aria-label="Development sign-in: act as"
+        {onSignOut ? (
+          <button
+            type="button"
+            className="button signout"
+            onClick={onSignOut}
+            title={signedInAs ? `Signed in as ${signedInAs}` : undefined}
           >
-            {users.length === 0 && <option value={userId}>{userId}</option>}
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            <LogOut size={14} aria-hidden="true" /> Sign out
+          </button>
+        ) : (
+          <label className="dev-user">
+            <span>Dev sign-in</span>
+            <select
+              value={userId}
+              onChange={(event) => onSignIn(event.target.value)}
+              aria-label="Development sign-in: act as"
+            >
+              {users.length === 0 && <option value={userId}>{userId}</option>}
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
     </nav>
   )

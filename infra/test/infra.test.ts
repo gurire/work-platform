@@ -36,6 +36,45 @@ describe('foundation stack', () => {
   })
 })
 
+function auth(name: 'dev' | 'prod') {
+  const app = new App()
+  const stage = new AppStage(app, name, { config: ENVIRONMENTS[name] })
+  return Template.fromStack(stage.node.findChild('Auth') as Stack)
+}
+
+describe('auth stack (specs/sign-in.md)', () => {
+  it('is invite only, needs an authenticator app, and has no SMS', () => {
+    for (const name of ['dev', 'prod'] as const) {
+      auth(name).hasResourceProperties('AWS::Cognito::UserPool', {
+        UserPoolName: `wm-${name}-users`,
+        AdminCreateUserConfig: Match.objectLike({ AllowAdminCreateUserOnly: true }),
+        MfaConfiguration: 'ON',
+        EnabledMfas: ['SOFTWARE_TOKEN_MFA'],
+        Policies: { PasswordPolicy: Match.objectLike({ MinimumLength: 12 }) },
+      })
+    }
+  })
+
+  it('gives the browser a public client with the code flow only, and no secret', () => {
+    const t = auth('dev')
+    t.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+      GenerateSecret: false,
+      AllowedOAuthFlows: ['code'],
+      CallbackURLs: ['http://localhost:5173/'],
+      PreventUserExistenceErrors: 'ENABLED',
+    })
+  })
+
+  it('keeps prod accounts if the stack is deleted, and lets dev go', () => {
+    const prod = JSON.stringify(auth('prod').findResources('AWS::Cognito::UserPool'))
+    expect(prod).toContain('"Retain"')
+    expect(prod).toContain('"DeletionProtection":"ACTIVE"')
+    expect(JSON.stringify(auth('dev').findResources('AWS::Cognito::UserPool'))).toContain(
+      '"Delete"',
+    )
+  })
+})
+
 describe('access stack', () => {
   const t = Template.fromStack(new AccessStack(new App(), 'Access'))
 

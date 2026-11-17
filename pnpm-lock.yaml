@@ -41,6 +41,9 @@ importers:
       '@wm/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      aws-jwt-verify:
+        specifier: ^5.2.1
+        version: 5.2.1
       fastify:
         specifier: ^5.0.0
         version: 5.12.7
@@ -673,6 +676,10 @@ packages:
     resolution: {integrity: sha512-Sb3RHuPt8yLP4BPFNl+D2li5wI9h4UL/+NYVq8FCxmDfUJwayzEOc/Tgb4wcixB8naOmPOLzhWkdbFx17tuhSg==}
     engines: {node: '>= 18.0.0'}
     hasBin: true
+
+  aws-jwt-verify@5.2.1:
+    resolution: {integrity: sha512-J+buA4M+qvQDk58WXFBLkDodkEX3DDL1ac5XFQPW3opxAsaLXYu5hYnlSHsaBRDBUXBAn695kE/cw/mdyJKwJg==}
+    engines: {node: '>=18.0.0'}
 
   balanced-match@4.0.4:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
@@ -1748,6 +1755,8 @@ snapshots:
       constructs: 10.8.1
 
   aws-cdk@2.1146.1: {}
+
+  aws-jwt-verify@5.2.1: {}
 
   balanced-match@4.0.4: {}
 
