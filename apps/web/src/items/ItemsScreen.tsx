@@ -51,6 +51,7 @@ const CATEGORIES: readonly { id: CategoryFilter; label: string }[] = [
 ]
 type PaletteMode = 'all' | 'status' | 'assignee' | 'priority'
 type Theme = 'light' | 'dark'
+export type ThemeChoice = 'system' | Theme
 
 const USER_KEY = 'wm-dev-user'
 function readDevUser(): string {
@@ -82,9 +83,25 @@ export function ItemsScreen() {
   const [showHud, setShowHud] = useState(
     () => new URLSearchParams(window.location.search).has('hud') || readSetting('wm.hud') === 'on',
   )
-  const [theme, setTheme] = useState<Theme>(() =>
-    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+  // Theme: follow the computer, or a fixed choice remembered in this browser.
+  const [themeChoice, setThemeChoiceState] = useState<ThemeChoice>(() => {
+    const saved = readSetting('wm.theme')
+    return saved === 'light' || saved === 'dark' ? saved : 'system'
+  })
+  const [systemDark, setSystemDark] = useState(
+    () => window.matchMedia('(prefers-color-scheme: dark)').matches,
   )
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+  const theme: Theme = themeChoice === 'system' ? (systemDark ? 'dark' : 'light') : themeChoice
+  const setThemeChoice = useCallback((choice: ThemeChoice) => {
+    writeSetting('wm.theme', choice)
+    setThemeChoiceState(choice)
+  }, [])
   const [palette, setPalette] = useState<PaletteMode | null>(null)
   const [userId, setUserId] = useState(devUser)
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash))
@@ -383,7 +400,10 @@ export function ItemsScreen() {
   const cycleDensity = useCallback(() => {
     setDensity((value) => DENSITIES[(DENSITIES.indexOf(value) + 1) % DENSITIES.length] ?? 'default')
   }, [])
-  const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
+  const toggleTheme = useCallback(
+    () => setThemeChoice(theme === 'dark' ? 'light' : 'dark'),
+    [theme, setThemeChoice],
+  )
   const commands = useMemo<Command[]>(() => {
     // Only the stages the selected item may move to are offered (specs/workflow.md).
     const reachable = new Set(
@@ -667,6 +687,8 @@ export function ItemsScreen() {
         myOpen={myOpen}
         onSignIn={setUserId}
         onCommands={() => setPalette('all')}
+        themeChoice={themeChoice}
+        onThemeChoice={setThemeChoice}
       />
       <div className={`shell density-${density}`}>
         <header className="toolbar">
@@ -885,7 +907,7 @@ export function ItemsScreen() {
                 ))}
                 <span className="muted">
                   J/K move · Enter open · I inbox · B board · S stage · A owner · P priority · D
-                  density · T theme · Ctrl Z undo
+                  density · T light/dark · Ctrl Z undo
                 </span>
               </footer>
             )}
