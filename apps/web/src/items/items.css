@@ -1,35 +1,62 @@
 /* Tokens. Alias tokens only; themes swap their values. Colours in OKLCH. */
+/* Tokens. Alias tokens only; themes swap their values. Light values pass WCAG AA on white. */
 :root {
   color-scheme: light;
-  --surface: oklch(0.985 0.003 200);
-  --surface-raised: oklch(1 0 0);
-  --surface-sunken: oklch(0.96 0.004 200);
-  --surface-active: oklch(0.93 0.03 195);
-  --border: oklch(0.9 0.005 200);
-  --text: oklch(0.24 0.01 200);
-  --text-muted: oklch(0.48 0.01 200);
-  --accent: oklch(0.52 0.11 195);
-  --status-todo: oklch(0.6 0.01 200);
-  --status-in_progress: oklch(0.62 0.15 75);
-  --status-done: oklch(0.58 0.14 150);
-  --status-cancelled: oklch(0.58 0.15 25);
-  --bad: oklch(0.52 0.18 25);
-  --good: oklch(0.45 0.12 150);
-  --row-h: 34px;
-  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --surface: #f6f7f8;
+  --surface-raised: #ffffff;
+  --surface-sunken: #eef0f2;
+  --surface-active: #e6f2f2;
+  --border: #e5e7eb;
+  --input-border: #8c939d;
+  --text: #111827;
+  --text-muted: #4b5563;
+  --text-subtle: #6b7280;
+  --accent: #0e7c7b;
+  --accent-strong: #0e7c7b;
+  --accent-soft: #e6f2f2;
+  --accent-text: #0b5f5e;
+  --ring-track: #d1d5db;
+  --status-todo: #6b7280;
+  --status-in_progress: #b45309;
+  --status-done: #15803d;
+  --status-cancelled: #b91c1c;
+  --bad: #dc2626;
+  --good: #15803d;
+  --late-bg: #fee2e2;
+  --late-fg: #991b1b;
+  --warn-bg: #fef3c7;
+  --warn-fg: #92400e;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --row-h: 36px;
+  --font: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --surface: oklch(0.19 0.006 200);
-  --surface-raised: oklch(0.23 0.007 200);
-  --surface-sunken: oklch(0.16 0.006 200);
-  --surface-active: oklch(0.3 0.04 195);
-  --border: oklch(0.3 0.007 200);
-  --text: oklch(0.93 0.005 200);
-  --text-muted: oklch(0.68 0.01 200);
-  --accent: oklch(0.76 0.11 195);
-  --bad: oklch(0.74 0.15 25);
-  --good: oklch(0.78 0.13 150);
+  --surface: #0d0f11;
+  --surface-raised: #16191c;
+  --surface-sunken: #1e2226;
+  --surface-active: #12302f;
+  --border: #2a2f35;
+  --input-border: #6b727b;
+  --text: #e6e8ea;
+  --text-muted: #a1a7ae;
+  --text-subtle: #8a9098;
+  --accent: #2bb3b1;
+  --accent-strong: #0e7c7b;
+  --accent-soft: #12302f;
+  --accent-text: #5fd0ce;
+  --ring-track: #3a4048;
+  --status-todo: #8a9098;
+  --status-in_progress: #f59e0b;
+  --status-done: #4ade80;
+  --status-cancelled: #f87171;
+  --bad: #f87171;
+  --good: #4ade80;
+  --late-bg: #3b1416;
+  --late-fg: #fca5a5;
+  --warn-bg: #3a2a0c;
+  --warn-fg: #fcd34d;
+  --shadow: none;
 }
 
 * {
@@ -49,10 +76,13 @@ body {
 }
 :focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline-offset: 2px;
+}
+a {
+  color: var(--accent-text);
 }
 kbd {
-  font: 11px var(--font);
+  font: 12px var(--font);
   padding: 1px 5px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -125,7 +155,7 @@ kbd {
 .columns,
 .row {
   display: grid;
-  grid-template-columns: 96px minmax(200px, 1fr) 80px 130px 90px 150px;
+  grid-template-columns: 112px minmax(200px, 1fr) 150px 110px 170px;
   align-items: center;
   padding: 0 16px;
 }
@@ -166,10 +196,15 @@ kbd {
   padding-right: 12px;
 }
 .cell-key,
-.cell-kind,
 .cell-priority,
 .cell-assignee {
   color: var(--text-muted);
+}
+.cell-key,
+.cell-priority {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .cell-status {
   display: flex;
@@ -469,13 +504,18 @@ kbd {
   margin-top: 12px;
 }
 .button-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--surface-raised);
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: #fff;
 }
 .button:disabled {
-  opacity: 0.55;
+  background: var(--surface-sunken);
+  border-color: var(--border);
+  color: var(--text-subtle);
   cursor: not-allowed;
+}
+.button:disabled kbd {
+  display: none;
 }
 .reason-box {
   display: flex;
@@ -951,8 +991,92 @@ kbd {
   padding: 0 5px;
   margin-left: 4px;
   border-radius: 999px;
-  background: var(--accent);
-  color: var(--surface-raised);
-  font-size: 11px;
+  background: var(--accent-strong);
+  color: #fff;
+  font-size: 12px;
   text-align: center;
+}
+
+/* Kit parts (ui/kit.tsx) */
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  font-weight: 600;
+  flex: none;
+  line-height: 1;
+}
+.avatar-empty {
+  border: 1.5px dashed var(--input-border);
+  background: transparent;
+}
+.person {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.person > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-tile {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: 700;
+  flex: none;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.chip.late {
+  background: var(--late-bg);
+  color: var(--late-fg);
+}
+.chip.warn {
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+.stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.kind-icon {
+  color: var(--text-subtle);
+  flex: none;
+}
+.card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.toast-action {
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
 }

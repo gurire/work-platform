@@ -215,6 +215,10 @@ export async function seedDevData(db: Db, itemCount = 2000, pipelineCount = 300)
   await db.exec(`UPDATE stage_history h
     SET entered_at = now() - make_interval(hours => (substring(w.key from 6)::int * 7) % 200)
     FROM work_items w WHERE w.id = h.item_id AND w.team_id = 'DATA'`)
+  // An item was created when it first entered a stage, so "Created" matches its history.
+  await db.exec(`UPDATE work_items w SET created_at = h.first_entered
+    FROM (SELECT item_id, min(entered_at) AS first_entered FROM stage_history GROUP BY item_id) h
+    WHERE h.item_id = w.id`)
   await db.exec('COMMIT')
 }
 

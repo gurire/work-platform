@@ -9,6 +9,7 @@ import type { InboxEntry } from './api'
 import { ItemPage } from './ItemPage'
 import { RecordPage } from './RecordPage'
 import { ItemList, type Density } from './ItemList'
+import { stageLook } from '../ui/kit'
 import { measureInteraction, perfStore } from './perf'
 import { ItemStore, type CategoryFilter, type ItemPatch } from './store'
 import './items.css'
@@ -47,6 +48,12 @@ export function ItemsScreen() {
   const perf = useSyncExternalStore(perfStore.subscribe, perfStore.get)
   const [cursor, setCursor] = useState(0)
   const [density, setDensity] = useState<Density>('default')
+  // WCAG 2.1.4: single-key shortcuts can be turned off; remembered on this computer.
+  const [singleKeys, setSingleKeys] = useState(() => readSetting('wm.singleKeys') !== 'off')
+  // The speed readout is for developers: add ?hud to the address, or run "Show speed readout".
+  const [showHud, setShowHud] = useState(
+    () => new URLSearchParams(window.location.search).has('hud') || readSetting('wm.hud') === 'on',
+  )
   const [theme, setTheme] = useState<Theme>(() =>
     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
   )
@@ -124,11 +131,13 @@ export function ItemsScreen() {
   }, [userId])
 
   const userNames = useMemo(() => new Map(users.map((u) => [u.id, u.name])), [users])
-  const stageNames = useMemo(
+  const stageLooks = useMemo(
     () =>
       new Map(
         teams.flatMap((team) =>
-          team.stages.map((stage) => [`${stage.teamId}:${stage.key}`, stage.name] as const),
+          team.stages.map(
+            (stage) => [`${stage.teamId}:${stage.key}`, stageLook(team.stages, stage.key)] as const,
+          ),
         ),
       ),
     [teams],
@@ -281,6 +290,29 @@ export function ItemsScreen() {
         run: cycleDensity,
       },
       {
+        id: 'single-keys',
+        group: 'View',
+        label: singleKeys ? 'Turn off single-key shortcuts' : 'Turn on single-key shortcuts',
+        run: () => {
+          writeSetting('wm.singleKeys', singleKeys ? 'off' : 'on')
+          setSingleKeys(!singleKeys)
+          store.toast(
+            singleKeys
+              ? 'Single-key shortcuts are off. Ctrl K still works.'
+              : 'Single-key shortcuts are on.',
+          )
+        },
+      },
+      {
+        id: 'hud',
+        group: 'View',
+        label: showHud ? 'Hide speed readout' : 'Show speed readout',
+        run: () => {
+          writeSetting('wm.hud', showHud ? 'off' : 'on')
+          setShowHud(!showHud)
+        },
+      },
+      {
         id: 'filter',
         group: 'View',
         label: 'Focus filter',
@@ -300,7 +332,20 @@ export function ItemsScreen() {
         run: () => setUserId(u.id),
       })),
     ]
-  }, [palette, edit, toggleTheme, cycleDensity, users, currentTeam, currentItem, teams, openBoard])
+  }, [
+    palette,
+    edit,
+    toggleTheme,
+    cycleDensity,
+    users,
+    currentTeam,
+    currentItem,
+    teams,
+    openBoard,
+    singleKeys,
+    showHud,
+    store,
+  ])
 
   const dynamicCommands = useCallback(
     (query: string): Command[] => {
@@ -332,6 +377,8 @@ export function ItemsScreen() {
         return
       }
       if (mod || event.altKey) return
+      // Letters and symbols are single-key shortcuts; Escape, arrows and Enter always work.
+      if (!singleKeys && event.key.length === 1) return
       if (route.page === 'inbox') {
         if (event.key === 'Escape') {
           event.preventDefault()
@@ -420,6 +467,7 @@ export function ItemsScreen() {
     teams,
     openBoard,
     openInbox,
+    singleKeys,
   ])
 
   const onSelect = useCallback((index: number) => setCursor(index), [])
@@ -551,7 +599,6 @@ export function ItemsScreen() {
           <div className="columns" aria-hidden="true">
             <span className="cell cell-key">Key</span>
             <span className="cell cell-title">Title</span>
-            <span className="cell cell-kind">Kind</span>
             <span className="cell cell-status">Stage</span>
             <span className="cell cell-priority">Priority</span>
             <span className="cell cell-assignee">Assignee</span>
@@ -563,46 +610,53 @@ export function ItemsScreen() {
             cursor={safeCursor}
             density={density}
             userNames={userNames}
-            stageNames={stageNames}
+            stageLooks={stageLooks}
             onSelect={onSelect}
             onRenderedRows={setRenderedRows}
           />
 
-          <footer className="hud" aria-label="Performance readout">
-            <span>
-              {ids.length.toLocaleString()} of {view.total.toLocaleString()} items
-            </span>
-            <span>{renderedRows} rows in DOM</span>
-            <span className={load.status === 'error' ? 'hud-bad' : undefined}>
-              {load.status === 'loading' && 'loading…'}
-              {load.status === 'ready' && `loaded in ${load.ms.toFixed(0)} ms`}
-              {load.status === 'error' && `could not load: ${load.message}`}
-            </span>
-            {me && (
+          {showHud && (
+            <footer className="hud" aria-label="Performance readout">
               <span>
-                {me.name} · {me.orgRole.replace('_', ' ')} · teams:{' '}
-                {Object.keys(me.teams).join(', ') || 'none'}
+                {ids.length.toLocaleString()} of {view.total.toLocaleString()} items
               </span>
-            )}
-            <span>filter {view.filterMs.toFixed(1)} ms</span>
-            {perf.map((stat) => (
-              <span key={stat.label} className={stat.p95 > 100 ? 'hud-bad' : 'hud-good'}>
-                {stat.label}: last {stat.last.toFixed(0)} · p50 {stat.p50.toFixed(0)} · p95{' '}
-                {stat.p95.toFixed(0)} ms ({stat.count})
+              <span>{renderedRows} rows in DOM</span>
+              <span className={load.status === 'error' ? 'hud-bad' : undefined}>
+                {load.status === 'loading' && 'loading…'}
+                {load.status === 'ready' && `loaded in ${load.ms.toFixed(0)} ms`}
+                {load.status === 'error' && `could not load: ${load.message}`}
               </span>
-            ))}
-            <span className="muted">
-              J/K move · Enter open · I inbox · B board · S stage · A owner · P priority · D density
-              · T theme · Ctrl Z undo
-            </span>
-          </footer>
+              {me && (
+                <span>
+                  {me.name} · {me.orgRole.replace('_', ' ')} · teams:{' '}
+                  {Object.keys(me.teams).join(', ') || 'none'}
+                </span>
+              )}
+              <span>filter {view.filterMs.toFixed(1)} ms</span>
+              {perf.map((stat) => (
+                <span key={stat.label} className={stat.p95 > 100 ? 'hud-bad' : 'hud-good'}>
+                  {stat.label}: last {stat.last.toFixed(0)} · p50 {stat.p50.toFixed(0)} · p95{' '}
+                  {stat.p95.toFixed(0)} ms ({stat.count})
+                </span>
+              ))}
+              <span className="muted">
+                J/K move · Enter open · I inbox · B board · S stage · A owner · P priority · D
+                density · T theme · Ctrl Z undo
+              </span>
+            </footer>
+          )}
         </>
       )}
 
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((toast) => (
           <div key={toast.id} className="toast">
-            {toast.message}
+            <span>{toast.message}</span>
+            {toast.action && (
+              <button type="button" className="toast-action" onClick={toast.action.run}>
+                {toast.action.label}
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -626,4 +680,21 @@ export function ItemsScreen() {
       )}
     </div>
   )
+}
+
+/** Settings live in localStorage, which can be missing or throw (private windows). */
+function readSetting(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeSetting(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    // Not remembered; the change still applies until the page is reloaded.
+  }
 }

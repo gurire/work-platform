@@ -151,3 +151,12 @@ item and mark it read.
 
 The sample data gives Chen Wei (the default sign-in) a few inbox entries to start with. If you
 ran the app before comments were added, delete `apps/api/.data` once.
+
+## Look and feel settings
+
+- **Single-key shortcuts** (J, K, S, A, P and so on) can be turned off from the command
+  palette (Ctrl K → "Turn off single-key shortcuts"). Ctrl K, Escape, arrows and Enter keep
+  working. The choice is remembered in this browser.
+- **Speed readout** (the developer footer with timings) is hidden by default. Add `?hud` to
+  the address, or run "Show speed readout" from the command palette.
+- After moving an item to another stage, the message at the bottom offers **Undo**.

@@ -12,9 +12,15 @@ export type ItemPatch = Partial<Pick<WorkItem, 'statusId' | 'assigneeId'>> & {
   fields?: Record<string, string | number | boolean | null>
 }
 
+export interface ToastAction {
+  readonly label: string
+  readonly run: () => void
+}
+
 export interface Toast {
   readonly id: number
   readonly message: string
+  readonly action?: ToastAction
 }
 
 interface Change {
@@ -41,6 +47,8 @@ export class ItemStore {
   /** Goes up whenever any item is added or changed, for screens that show many items. */
   private revision = 0
   private allIds: string[] = []
+  /** Items that belong to the list. Items fetched on their own (put) stay out of it. */
+  private readonly listed = new Set<string>()
   private viewSnapshot: ViewSnapshot = {
     ids: [],
     total: 0,
@@ -70,6 +78,7 @@ export class ItemStore {
     this.keyToId.clear()
     this.haystack.clear()
     this.allIds = []
+    this.listed.clear()
     this.undoStack = []
     this.changed()
     this.applyFilter(this.viewSnapshot.query, this.viewSnapshot.category)
@@ -78,7 +87,10 @@ export class ItemStore {
   /** Add a page of items as it arrives; the view updates without waiting for the rest. */
   append(items: readonly WorkItem[]): void {
     for (const item of items) {
-      if (!this.items.has(item.id)) this.allIds.push(item.id)
+      if (!this.listed.has(item.id)) {
+        this.listed.add(item.id)
+        this.allIds.push(item.id)
+      }
       this.items.set(item.id, item)
       this.keyToId.set(item.key.toLowerCase(), item.id)
       this.haystack.set(item.id, `${item.key} ${item.title}`.toLowerCase())
@@ -157,11 +169,19 @@ export class ItemStore {
     const after = this.applyPatch(before, patch)
     this.setItem(after)
     const change: Change = { id, before, after }
+    const announce = !this.undoing
     this.undoStack.push(change)
     if (this.undoStack.length > 50) this.undoStack.shift()
 
     this.save(before, patch).then(
       (saved) => {
+        if (patch.statusId !== undefined && patch.statusId !== before.statusId && announce) {
+          const name = this.stages.get(`${before.teamId}:${patch.statusId}`)?.name ?? patch.statusId
+          this.toast(`${before.key} moved to ${name}.`, {
+            label: 'Undo',
+            run: () => this.undoChange(change),
+          })
+        }
         // The server has the last word (for example, a hand-over may clear the owner),
         // unless a newer local change has replaced this one in the meantime.
         if (saved && this.items.get(id) === after) this.setItem(saved)
@@ -180,6 +200,16 @@ export class ItemStore {
   undo(): void {
     const change = this.undoStack.pop()
     if (!change) return
+    this.undoChange(change)
+  }
+
+  private undoing = false
+  private readonly undone = new WeakSet<Change>()
+
+  private undoChange(change: Change): void {
+    if (this.undone.has(change)) return
+    this.undone.add(change)
+    this.undoStack = this.undoStack.filter((c) => c !== change)
     const { before, after } = change
     const patch: ItemPatch = {
       ...(before.statusId !== after.statusId ? { statusId: before.statusId } : {}),
@@ -188,13 +218,17 @@ export class ItemStore {
         ? { priority: Number(before.fields.priority ?? 0) }
         : {}),
     }
+    this.undoing = true
     this.mutate(change.id, patch)
+    this.undoing = false
     this.undoStack.pop() // the undo itself is not something to undo
     this.toast(`${before.key}: change undone.`)
   }
 
-  toast(message: string): void {
-    const toast = { id: this.nextToastId++, message }
+  toast(message: string, action?: ToastAction): void {
+    const toast: Toast = action
+      ? { id: this.nextToastId++, message, action }
+      : { id: this.nextToastId++, message }
     this.toastList = [...this.toastList, toast]
     this.emit()
     setTimeout(() => {
@@ -239,7 +273,11 @@ export class ItemStore {
   /** Put the server's copy of one item into the store, for example after a move on the item page. */
   put(item: WorkItem): void {
     if (!this.items.has(item.id)) {
-      this.append([item])
+      // Known by itself, not part of the list: keep it out of the list order and counts.
+      this.items.set(item.id, item)
+      this.keyToId.set(item.key.toLowerCase(), item.id)
+      this.haystack.set(item.id, `${item.key} ${item.title}`.toLowerCase())
+      this.changed()
       return
     }
     this.setItem(item)

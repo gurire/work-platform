@@ -95,7 +95,7 @@ describe('ItemStore', () => {
     expect(store.getView().total).toBe(1000)
   })
 
-  it('put replaces a known item and adds an unknown one (opened from a link)', () => {
+  it('put replaces a known item and keeps an unknown one (opened from a link) out of the list', () => {
     const changed = vi.fn()
     store.subscribeItem('item-1', changed)
     const known = store.getItem('item-1')!
@@ -106,7 +106,28 @@ describe('ItemStore', () => {
 
     store.put({ ...known, id: 'item-new', key: 'OPS-9999', title: 'From a shared link' })
     expect(store.idForKey('ops-9999')).toBe('item-new')
+    expect(store.getItem('item-new')?.title).toBe('From a shared link')
+    // Opening an item early must not make it "item 1 of N" in the list.
+    expect(store.getView().total).toBe(1000)
+    expect(store.getView().ids[0]).toBe('item-1')
+
+    // When its page of the list arrives, it joins the list in list order.
+    store.append([store.getItem('item-new')!])
     expect(store.getView().total).toBe(1001)
+    expect(store.getView().ids.at(-1)).toBe('item-new')
+  })
+
+  it('a stage move offers Undo, and Undo puts the stage back once', async () => {
+    const known = store.getItem('item-1')!
+    const target = known.statusId === 'done' ? 'todo' : 'done'
+    store.mutate('item-1', { statusId: target })
+    await Promise.resolve()
+    await Promise.resolve()
+    const toast = store.getToasts().find((t) => t.action)
+    expect(toast?.action?.label).toBe('Undo')
+    toast?.action?.run()
+    toast?.action?.run()
+    expect(store.getItem('item-1')?.statusId).toBe(known.statusId)
   })
 
   it('itemsForTeam ignores the filter, and the revision moves on every change', () => {
