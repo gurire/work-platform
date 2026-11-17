@@ -188,3 +188,21 @@ ran the app before comments were added, delete `apps/api/.data` once.
 - **Select several items** with the checkboxes (Shift-click selects a range, X selects the
   current row). The bar at the bottom moves, assigns or sets priority for all of them, with
   one Undo. Moving needs items from one team, because each team has its own stages.
+
+## Item page
+
+- Under the title, **pills** show stage, priority, owner and how long the item has waited in
+  its stage (red when past the stage's target).
+- The **stepper** shows every stage with ticks for the ones passed and who owned each.
+- The **"To send this to …" card** lists what is still needed, with one main button. Less
+  common moves (back, skip ahead, force, drop) are under **More**.
+- New comments start as **internal notes**; choose "Visible to clients" to share one.
+- The command palette (S, A, P on an item) says which item it is acting on.
+
+## Board and inbox
+
+- The **board** has a summary (open, past target, stages over limit, finished), a bar under
+  each limited stage, and a key. Finished and dropped stages start folded; click to open them.
+- Every card has a **⋯ menu** to move it without dragging.
+- The **inbox** groups entries by day, has tabs (Unread, Mentions, Reviews, Assigned), and each
+  unread entry has a tick to mark it read without opening it.

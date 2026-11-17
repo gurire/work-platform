@@ -129,3 +129,32 @@ export function shortDate(iso: string, now: number = Date.now()): string {
     ...(sameYear ? {} : { year: 'numeric' }),
   })
 }
+
+/**
+ * The one forward move the item page offers as its main button, and every other allowed move
+ * (back, drop, skip ahead) for the "More" menu. Forward is the nearest later stage that is not
+ * a cancelled one.
+ */
+export function splitMoves<T extends Pick<Stage, 'key' | 'position' | 'category'>>(
+  moves: readonly T[],
+  current: Pick<Stage, 'position'> | undefined,
+): { forward: T | null; others: T[] } {
+  const sorted = [...moves].sort((a, b) => a.position - b.position)
+  const forward =
+    (current && sorted.find((s) => s.position > current.position && s.category !== 'cancelled')) ??
+    null
+  return { forward, others: sorted.filter((s) => s !== forward) }
+}
+
+/** Inbox day groups: "Today", "Yesterday", "This week", then "Earlier". Local time. */
+export function dayGroup(iso: string, now: number = Date.now()): string {
+  const day = (ms: number) => {
+    const d = new Date(ms)
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  }
+  const diff = Math.round((day(now) - day(new Date(iso).getTime())) / 86_400_000)
+  if (diff <= 0) return 'Today'
+  if (diff === 1) return 'Yesterday'
+  if (diff < 7) return 'This week'
+  return 'Earlier'
+}

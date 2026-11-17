@@ -56,7 +56,8 @@ function Composer({
   onCancel?: () => void
 }) {
   const [text, setText] = useState(initial)
-  const [internal, setInternal] = useState(false)
+  // Internal first: a note reaches clients only when someone chooses that (redesign step 4).
+  const [internal, setInternal] = useState(true)
   const [picker, setPicker] = useState<{ start: number; query: string } | null>(null)
   const [active, setActive] = useState(0)
   const box = useRef<HTMLTextAreaElement>(null)
@@ -159,14 +160,14 @@ function Composer({
           </button>
         )}
         {showInternal && (
-          <label className="muted internal-toggle">
-            <input
-              type="checkbox"
-              checked={internal}
-              onChange={(event) => setInternal(event.target.checked)}
-            />{' '}
-            Internal note (never shown to clients)
-          </label>
+          <div className="audience" role="group" aria-label="Who can see this">
+            <button type="button" aria-pressed={internal} onClick={() => setInternal(true)}>
+              Internal note
+            </button>
+            <button type="button" aria-pressed={!internal} onClick={() => setInternal(false)}>
+              Visible to clients
+            </button>
+          </div>
         )}
       </div>
     </div>

@@ -41,13 +41,12 @@ function ChipMenu<T>({
     const close = (event: MouseEvent | KeyboardEvent) => {
       const details = ref.current
       if (!details?.open) return
-      if (
-        event instanceof KeyboardEvent
-          ? event.key === 'Escape'
-          : !details.contains(event.target as Node)
-      ) {
+      if (event instanceof KeyboardEvent) {
+        if (event.key !== 'Escape') return
+        // Close the menu only; Escape must not also clear the selection.
+        event.stopPropagation()
         details.open = false
-      }
+      } else if (!details.contains(event.target as Node)) details.open = false
     }
     document.addEventListener('mousedown', close)
     document.addEventListener('keydown', close)
