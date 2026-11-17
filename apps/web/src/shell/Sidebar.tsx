@@ -180,7 +180,7 @@ export function Sidebar({
 
       <div className="sidebar-foot">
         <span className="person">
-          <Avatar name={me?.name ?? null} id={me?.id} size={28} />
+          <Avatar name={me?.name ?? null} id={me?.id ?? null} size={28} />
           <span className="foot-name">
             <b>{me?.name ?? '…'}</b>
             <small>{me ? ROLE[me.orgRole] : ''}</small>

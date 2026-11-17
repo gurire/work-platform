@@ -118,7 +118,7 @@ export function MyWork({ store, me, teams, users, inbox }: Props) {
   )
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone?: 'bad' }) {
+function Stat({ label, value, tone }: { label: string; value: number; tone?: 'bad' | undefined }) {
   return (
     <div className="card stat">
       <span className="stat-label">{label}</span>
