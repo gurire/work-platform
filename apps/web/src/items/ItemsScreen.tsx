@@ -16,6 +16,20 @@ import type { InboxEntry } from './api'
 import { ItemPage } from './ItemPage'
 import { RecordPage } from './RecordPage'
 import { ItemList, type Density } from './ItemList'
+import { ListControls } from './ListControls'
+import { SelectionBar } from './SelectionBar'
+import {
+  GROUP_LABELS,
+  NO_FACETS,
+  buildRows,
+  gridTemplate,
+  groupIds,
+  parseColumns,
+  COLUMNS,
+  type ColumnId,
+  type Facets,
+  type GroupBy,
+} from './list-view'
 import { stageLook } from '../ui/kit'
 import { measureInteraction, perfStore } from './perf'
 import { ItemStore, type CategoryFilter, type ItemPatch } from './store'
@@ -83,7 +97,33 @@ export function ItemsScreen() {
   const filterRef = useRef<HTMLInputElement>(null)
   const eventTime = useRef(0)
 
-  const ids = view.ids
+  // List views (redesign step 3): chips, grouping, columns and multi-select.
+  const listRevision = useSyncExternalStore(store.subscribeChanges, store.getRevision)
+  const [groupBy, setGroupByState] = useState<GroupBy>(() => {
+    const saved = readSetting('wm.groupBy')
+    return saved && saved in GROUP_LABELS ? (saved as GroupBy) : 'none'
+  })
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
+  const [columns, setColumnsState] = useState<readonly ColumnId[]>(() =>
+    parseColumns(readSetting('wm.columns')),
+  )
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
+  const [facets, setFacetsState] = useState<Facets>(NO_FACETS)
+  const selectAnchor = useRef<number | null>(null)
+  // Grouping depends on item values, so regroup when items change; a flat list does not need to.
+  const regroupKey = groupBy === 'none' ? 0 : listRevision
+  const { rows, order } = useMemo(() => {
+    void regroupKey
+    const ctx = {
+      stages: new Map(
+        teams.flatMap((t) => t.stages.map((st) => [`${st.teamId}:${st.key}`, st] as const)),
+      ),
+      userNames: new Map(users.map((u) => [u.id, u.name])),
+      teamNames: new Map(teams.map((t) => [t.id, t.name])),
+    }
+    return buildRows(groupIds(view.ids, store.getItem, groupBy, ctx), collapsed)
+  }, [view, groupBy, collapsed, teams, users, store, regroupKey])
+  const ids = order
   const safeCursor = Math.min(cursor, Math.max(ids.length - 1, 0))
   // On an item page, commands act on that item; on the list, on the selected row.
   const currentId = route.page === 'item' ? store.idForKey(route.key) : ids[safeCursor]
@@ -145,6 +185,7 @@ export function ItemsScreen() {
   }, [userId])
 
   const userNames = useMemo(() => new Map(users.map((u) => [u.id, u.name])), [users])
+  const teamNames = useMemo(() => new Map(teams.map((t) => [t.id, t.name])), [teams])
   const stageLooks = useMemo(
     () =>
       new Map(
@@ -197,6 +238,70 @@ export function ItemsScreen() {
   useEffect(() => {
     if (route.page === 'list') store.setTeam(route.teamId ?? null)
   }, [route, store])
+
+  // Stage chips only mean something inside one team; a new team or filter clears the selection.
+  useEffect(() => {
+    setFacetsState((f) => (f.stages?.length ? { ...f, stages: [] } : f))
+    setSelected(new Set())
+  }, [routeTeamId])
+  useEffect(() => {
+    store.setFacets(facets)
+    setCursor(0)
+    setSelected(new Set())
+  }, [facets, store])
+
+  const setGroupBy = useCallback((by: GroupBy) => {
+    writeSetting('wm.groupBy', by)
+    setGroupByState(by)
+    setCollapsed(new Set())
+    setCursor(0)
+  }, [])
+  const setColumns = useCallback((next: readonly ColumnId[]) => {
+    const ordered = COLUMNS.map((c) => c.id).filter((id) => next.includes(id))
+    writeSetting('wm.columns', ordered.join(','))
+    setColumnsState(ordered)
+  }, [])
+  const toggleGroup = useCallback((key: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+  const toggleSelect = useCallback(
+    (id: string, index: number, range: boolean) => {
+      setSelected((prev) => {
+        const next = new Set(prev)
+        const from = selectAnchor.current
+        if (range && from !== null) {
+          for (let i = Math.min(from, index); i <= Math.max(from, index); i++) {
+            const rowId = ids[i]
+            if (rowId) next.add(rowId)
+          }
+        } else if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      })
+      selectAnchor.current = index
+    },
+    [ids],
+  )
+  const selectedIds = useMemo(() => [...selected], [selected])
+  // "75 of 300": out of the team's items on a team's list, out of everything otherwise.
+  const teamTotal = useMemo(() => {
+    void listRevision
+    return pageTeam ? store.itemsForTeam(pageTeam.id).length : view.total
+  }, [pageTeam, store, view.total, listRevision])
+  const bulkTeams = new Set(selectedIds.map((id) => store.getItem(id)?.teamId))
+  const bulkStages =
+    bulkTeams.size === 1 ? (teams.find((t) => bulkTeams.has(t.id))?.stages ?? null) : null
+  const kinds = useMemo(() => {
+    void listRevision
+    const present = new Set<string>()
+    for (const team of teams) for (const item of store.itemsForTeam(team.id)) present.add(item.kind)
+    return [...present].sort()
+  }, [teams, store, listRevision])
 
   const edit = useCallback(
     (label: string, patch: ItemPatch) => {
@@ -514,6 +619,10 @@ export function ItemsScreen() {
         },
         i: openInbox,
         '/': () => filterRef.current?.focus(),
+        x: () => {
+          if (currentId) toggleSelect(currentId, safeCursor, false)
+        },
+        Escape: () => setSelected(new Set()),
       }
       const action = actions[event.key]
       if (action) {
@@ -539,6 +648,8 @@ export function ItemsScreen() {
     openBoard,
     openInbox,
     singleKeys,
+    toggleSelect,
+    safeCursor,
   ])
 
   const onSelect = useCallback((index: number) => setCursor(index), [])
@@ -666,24 +777,87 @@ export function ItemsScreen() {
           />
         ) : (
           <>
-            <div className="columns" aria-hidden="true">
+            <ListControls
+              facets={facets}
+              onFacets={setFacetsState}
+              users={users}
+              meId={me?.id ?? null}
+              stages={pageTeam ? pageTeam.stages : null}
+              kinds={kinds}
+              groupBy={groupBy}
+              onGroupBy={setGroupBy}
+              columns={columns}
+              onColumns={setColumns}
+              shown={ids.length}
+              total={teamTotal}
+            />
+            <div className="columns" style={{ gridTemplateColumns: gridTemplate(columns) }}>
+              <span className="cell cell-check">
+                <input
+                  type="checkbox"
+                  aria-label="Select all shown items"
+                  checked={ids.length > 0 && selected.size === ids.length}
+                  ref={(box) => {
+                    if (box) box.indeterminate = selected.size > 0 && selected.size < ids.length
+                  }}
+                  onChange={() => setSelected(selected.size > 0 ? new Set() : new Set(ids))}
+                />
+              </span>
               <span className="cell cell-key">Key</span>
               <span className="cell cell-title">Title</span>
-              <span className="cell cell-status">Stage</span>
-              <span className="cell cell-priority">Priority</span>
-              <span className="cell cell-assignee">Assignee</span>
+              {COLUMNS.filter((c) => columns.includes(c.id)).map((c) => (
+                <span key={c.id} className={`cell cell-${c.id}`}>
+                  {c.label}
+                </span>
+              ))}
             </div>
 
             <ItemList
               store={store}
-              ids={ids}
+              rows={rows}
               cursor={safeCursor}
+              activeId={ids[safeCursor]}
+              itemCount={ids.length}
               density={density}
+              columns={columns}
+              selected={selected}
               userNames={userNames}
+              teamNames={teamNames}
               stageLooks={stageLooks}
               onSelect={onSelect}
+              onToggle={toggleSelect}
+              onToggleGroup={toggleGroup}
               onRenderedRows={setRenderedRows}
             />
+
+            {selected.size > 0 && (
+              <SelectionBar
+                count={selected.size}
+                stages={bulkStages}
+                users={users}
+                onMove={(key) => {
+                  const name = bulkStages?.find((st) => st.key === key)?.name ?? key
+                  void store.mutateMany(selectedIds, { statusId: key }, `Moved {items} to ${name}.`)
+                }}
+                onAssign={(userId) => {
+                  const name = userId ? (userNames.get(userId) ?? userId) : null
+                  void store.mutateMany(
+                    selectedIds,
+                    { assigneeId: userId },
+                    name ? `Gave {items} to ${name}.` : 'Unassigned {items}.',
+                  )
+                }}
+                onPriority={(level) => {
+                  const label = SAMPLE_PRIORITIES[level] ?? 'None'
+                  void store.mutateMany(
+                    selectedIds,
+                    { priority: level },
+                    `Set {items} to ${label} priority.`,
+                  )
+                }}
+                onClear={() => setSelected(new Set())}
+              />
+            )}
 
             {showHud && (
               <footer className="hud" aria-label="Performance readout">

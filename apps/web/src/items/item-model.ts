@@ -117,3 +117,15 @@ export function shortDuration(hours: number): string {
   if (hours < 48) return `${Math.floor(hours)} h`
   return `${Math.floor(hours / 24)} d`
 }
+
+/** "12 Nov", or "12 Nov 2025" for another year. */
+export function shortDate(iso: string, now: number = Date.now()): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  const sameYear = date.getFullYear() === new Date(now).getFullYear()
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  })
+}

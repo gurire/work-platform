@@ -177,3 +177,14 @@ ran the app before comments were added, delete `apps/api/.data` once.
   you are in opens to show its List (`#/team/DATA`), Board and Dashboard.
 - **Dev sign-in** ("act as") moved to the bottom of the sidebar. It is for local development
   only and goes away when real sign-in arrives.
+
+## Lists
+
+- **Filter chips** under the toolbar: Owner (including "Me" and "Unassigned"), Priority, Kind,
+  and Stage on a team's list. They combine with the search box and the status tabs.
+- **Group** by stage, owner, priority, kind or team; click a group heading to fold it.
+- **Columns**: choose which columns show. The choice and the grouping are remembered in this
+  browser.
+- **Select several items** with the checkboxes (Shift-click selects a range, X selects the
+  current row). The bar at the bottom moves, assigns or sets priority for all of them, with
+  one Undo. Moving needs items from one team, because each team has its own stages.
