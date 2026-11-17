@@ -21,8 +21,15 @@ if ($existing -eq '0') {
   $title = git log -1 --format=%s $Branch
   $body = (git log -1 --format=%b $Branch) -join "`n"
   if ([string]::IsNullOrWhiteSpace($body)) { $body = $title }
-  gh pr create --base main --head $Branch --title $title --body $body
-  if ($LASTEXITCODE -ne 0) { Fail 'Could not create the pull request.' }
+  # Windows PowerShell 5.1 breaks quotes inside arguments to other programs, so the body goes
+  # through a file and quotes in the title become single quotes.
+  $title = $title -replace '"', "'"
+  $bodyFile = [System.IO.Path]::GetTempFileName()
+  [System.IO.File]::WriteAllText($bodyFile, $body)
+  gh pr create --base main --head $Branch --title $title --body-file $bodyFile
+  $created = $LASTEXITCODE
+  Remove-Item $bodyFile -ErrorAction SilentlyContinue
+  if ($created -ne 0) { Fail 'Could not create the pull request.' }
 } else {
   Write-Host 'A pull request for this branch is already open.'
 }
