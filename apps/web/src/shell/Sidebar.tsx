@@ -8,12 +8,16 @@ import {
   Inbox,
   LayoutGrid,
   ListChecks,
+  Monitor,
+  Moon,
   Search,
   SquareKanban,
+  Sun,
   UserRound,
 } from 'lucide-react'
 import type { ApiTeam, ApiUser, Me } from '../items/api'
 import type { Route } from '../items/item-model'
+import type { ThemeChoice } from '../items/ItemsScreen'
 import { Avatar, TeamTile } from '../ui/kit'
 
 interface Props {
@@ -27,6 +31,8 @@ interface Props {
   myOpen: number
   onSignIn: (userId: string) => void
   onCommands: () => void
+  themeChoice: ThemeChoice
+  onThemeChoice: (choice: ThemeChoice) => void
 }
 
 const ROLE: Record<string, string> = { org_admin: 'Org admin', member: 'Member', viewer: 'Viewer' }
@@ -74,6 +80,8 @@ export function Sidebar({
   myOpen,
   onSignIn,
   onCommands,
+  themeChoice,
+  onThemeChoice,
 }: Props) {
   const page = route.page
   const icon = (Icon: typeof Inbox) => <Icon size={16} aria-hidden="true" />
@@ -186,6 +194,26 @@ export function Sidebar({
             <small>{me ? ROLE[me.orgRole] : ''}</small>
           </span>
         </span>
+        <div className="theme-switch" role="group" aria-label="Theme">
+          {(
+            [
+              ['system', 'Match computer', Monitor],
+              ['light', 'Light', Sun],
+              ['dark', 'Dark', Moon],
+            ] as const
+          ).map(([choice, label, Icon]) => (
+            <button
+              key={choice}
+              type="button"
+              aria-pressed={themeChoice === choice}
+              title={label}
+              onClick={() => onThemeChoice(choice)}
+            >
+              <Icon size={14} aria-hidden="true" />
+              <span>{choice === 'system' ? 'Auto' : label}</span>
+            </button>
+          ))}
+        </div>
         <label className="dev-user">
           <span>Dev sign-in</span>
           <select
