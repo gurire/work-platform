@@ -206,3 +206,10 @@ ran the app before comments were added, delete `apps/api/.data` once.
 - Every card has a **⋯ menu** to move it without dragging.
 - The **inbox** groups entries by day, has tabs (Unread, Mentions, Reviews, Assigned), and each
   unread entry has a tick to mark it read without opening it.
+
+## People
+
+- **People** in the sidebar (`#/people`) lists everyone, their teams and roles, and their open
+  work across the teams you can see: in progress, up next, urgent, and a bar split by team.
+  Click a person to see their open items. It shows load, not speed, and never mentions a
+  private team you are not in.

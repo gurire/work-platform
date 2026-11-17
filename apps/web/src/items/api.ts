@@ -288,6 +288,17 @@ export interface TeamDashboard {
   }[]
 }
 
+export interface Person {
+  readonly id: string
+  readonly name: string
+  readonly orgRole: 'org_admin' | 'member' | 'viewer'
+  /** Only teams the caller can see. */
+  readonly teams: readonly {
+    readonly teamId: string
+    readonly role: 'admin' | 'member' | 'reviewer'
+  }[]
+}
+
 export interface TeamHealth {
   readonly team: { readonly id: string; readonly name: string }
   readonly status: HealthStatus
@@ -420,6 +431,7 @@ export function createApi(getUser: () => string) {
     dashboard: (teamId: string) =>
       request<TeamDashboard>(`/teams/${encodeURIComponent(teamId)}/dashboard`),
     dashboards: () => request<TeamsDashboard>('/dashboards/teams'),
+    people: () => request<{ people: Person[] }>('/people'),
     itemRecord: (id: string) => request<ItemRecord>(`/items/${encodeURIComponent(id)}/record`),
     linkRecord: (id: string, recordId: string | null) =>
       request<{ item: WorkItem | null }>(`/items/${encodeURIComponent(id)}`, {

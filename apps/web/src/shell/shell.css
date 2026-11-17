@@ -320,3 +320,190 @@
   box-shadow: var(--shadow);
   font-weight: 600;
 }
+
+/* People (redesign step 6) */
+.people {
+  flex: 1;
+  overflow: auto;
+  padding: 24px 28px 32px;
+}
+.people-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.people-head h1 {
+  margin: 0;
+  font-size: 20px;
+}
+.people-head p {
+  margin: 2px 0 0;
+}
+.people-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 0 8px;
+  height: 32px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+}
+.people-search input {
+  width: 180px;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+}
+.people-table {
+  padding: 4px 0;
+}
+.people-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.2fr) minmax(200px, 1.4fr) 90px 80px 70px minmax(
+      180px,
+      1.4fr
+    );
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 16px;
+}
+.people-headrow {
+  min-height: 34px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.people-group + .people-group {
+  border-top: 1px solid var(--border);
+}
+.people-group.open {
+  background: var(--surface);
+}
+.people-row .num {
+  text-align: center;
+}
+.people-headrow span:nth-child(3),
+.people-headrow span:nth-child(4),
+.people-headrow span:nth-child(5) {
+  text-align: center;
+}
+.urgent-num {
+  color: var(--late-fg);
+  font-weight: 600;
+}
+.person-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.person-toggle:disabled {
+  cursor: default;
+}
+.chev-space {
+  width: 14px;
+}
+.person-name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.person-name small {
+  font-size: 12px;
+}
+.person-teams {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.team-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--surface-raised);
+}
+.team-chip small {
+  color: var(--text-muted);
+}
+.load-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.load-bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  min-width: 2px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.load-bar .seg {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+}
+.seg-0 {
+  background: #2a78d6;
+}
+.seg-1 {
+  background: #eb6834;
+}
+.seg-2 {
+  background: #1baf7a;
+}
+.seg-3 {
+  background: #eda100;
+}
+.seg-4 {
+  background: #e87ba4;
+}
+.seg-5 {
+  background: #6250d6;
+}
+.load-total {
+  min-width: 28px;
+  font-weight: 600;
+}
+.person-items {
+  list-style: none;
+  margin: 0;
+  padding: 0 16px 12px 58px;
+}
+.people-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.people-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.people-legend .seg {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}

@@ -77,6 +77,7 @@ describe('routes', () => {
     expect(parseRoute('#/team/../x')).toEqual({ page: 'list' })
     expect(parseRoute('#/dashboard/DATA')).toEqual({ page: 'dashboard', teamId: 'DATA' })
     expect(parseRoute('#/dashboards')).toEqual({ page: 'dashboards' })
+    expect(parseRoute('#/people')).toEqual({ page: 'people' })
   })
 })
 

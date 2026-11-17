@@ -39,6 +39,7 @@ import { TeamDashboard } from '../dashboards/TeamDashboard'
 import { AllTeams } from '../dashboards/AllTeams'
 import { Sidebar } from '../shell/Sidebar'
 import { MyWork } from '../shell/MyWork'
+import { People } from '../shell/People'
 import '../shell/shell.css'
 import { TeamTile } from '../ui/kit'
 
@@ -231,13 +232,15 @@ export function ItemsScreen() {
         ? 'Inbox'
         : route.page === 'dashboards'
           ? 'All teams'
-          : route.page === 'item'
-            ? (currentItem?.key ?? route.key)
-            : route.page === 'record'
-              ? 'Record'
-              : pageTeam
-                ? `${pageTeam.name}${route.page === 'board' ? ' · Board' : route.page === 'dashboard' ? ' · Dashboard' : ''}`
-                : 'All items'
+          : route.page === 'people'
+            ? 'People'
+            : route.page === 'item'
+              ? (currentItem?.key ?? route.key)
+              : route.page === 'record'
+                ? 'Record'
+                : pageTeam
+                  ? `${pageTeam.name}${route.page === 'board' ? ' · Board' : route.page === 'dashboard' ? ' · Dashboard' : ''}`
+                  : 'All items'
   const revision = useSyncExternalStore(store.subscribeChanges, store.getRevision)
   const myOpen = useMemo(() => {
     void revision
@@ -579,6 +582,7 @@ export function ItemsScreen() {
       if (
         route.page === 'inbox' ||
         route.page === 'me' ||
+        route.page === 'people' ||
         route.page === 'dashboard' ||
         route.page === 'dashboards'
       ) {
@@ -753,6 +757,8 @@ export function ItemsScreen() {
             onBack={backToList}
             onOpenRecord={openRecord}
           />
+        ) : route.page === 'people' ? (
+          <People api={api} store={store} teams={teams} />
         ) : route.page === 'me' ? (
           <MyWork
             store={store}
