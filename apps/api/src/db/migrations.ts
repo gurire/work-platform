@@ -324,6 +324,15 @@ const MIGRATIONS: readonly { id: string; sql: string }[] = [
       CREATE INDEX inbox_user ON inbox (user_id, id DESC);
     `,
   },
+  {
+    // Dashboards (specs/dashboards.md, section 4). Expand only: a new nullable column.
+    // Null means "use the starting kind", worked out from the stage's category and name.
+    id: '0009_stage_kind',
+    sql: `
+      ALTER TABLE stages ADD COLUMN kind text
+        CHECK (kind IN ('waiting', 'working', 'review', 'release'));
+    `,
+  },
 ]
 
 export async function migrate(db: Db): Promise<string[]> {

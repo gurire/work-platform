@@ -16,6 +16,8 @@
   --accent-soft: #e6f2f2;
   --accent-text: #0b5f5e;
   --ring-track: #d1d5db;
+  --seq-hue: #0e7c7b;
+  --seq-base: #ffffff;
   --status-todo: #6b7280;
   --status-in_progress: #b45309;
   --status-done: #15803d;
@@ -46,6 +48,8 @@
   --accent-soft: #12302f;
   --accent-text: #5fd0ce;
   --ring-track: #3a4048;
+  --seq-hue: #3cc4c1;
+  --seq-base: #59616b;
   --status-todo: #8a9098;
   --status-in_progress: #f59e0b;
   --status-done: #4ade80;

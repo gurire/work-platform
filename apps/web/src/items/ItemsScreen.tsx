@@ -2,7 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { allowedDestinations, SAMPLE_PRIORITIES } from '@wm/shared'
 import { createApi, type ApiTeam, type ApiUser, type Me } from './api'
 import { CommandPalette, type Command } from './CommandPalette'
-import { boardHash, itemHash, parseRoute, recordHash, type Route } from './item-model'
+import {
+  boardHash,
+  dashboardHash,
+  itemHash,
+  parseRoute,
+  recordHash,
+  type Route,
+} from './item-model'
 import { Board } from './Board'
 import { Inbox } from './Inbox'
 import type { InboxEntry } from './api'
@@ -13,6 +20,9 @@ import { stageLook } from '../ui/kit'
 import { measureInteraction, perfStore } from './perf'
 import { ItemStore, type CategoryFilter, type ItemPatch } from './store'
 import './items.css'
+import '../dashboards/dashboards.css'
+import { TeamDashboard } from '../dashboards/TeamDashboard'
+import { AllTeams } from '../dashboards/AllTeams'
 
 const DENSITIES: readonly Density[] = ['compact', 'default', 'comfortable']
 const CATEGORIES: readonly { id: CategoryFilter; label: string }[] = [
@@ -197,6 +207,9 @@ export function ItemsScreen() {
   const openBoard = useCallback((teamId: string) => {
     window.location.hash = boardHash(teamId)
   }, [])
+  const openDashboard = useCallback((teamId: string | null) => {
+    window.location.hash = dashboardHash(teamId)
+  }, [])
   const openRecord = useCallback((id: string) => {
     window.location.hash = recordHash(id)
   }, [])
@@ -319,6 +332,18 @@ export function ItemsScreen() {
         shortcut: '/',
         run: () => filterRef.current?.focus(),
       },
+      {
+        id: 'dashboards',
+        group: 'Dashboards',
+        label: 'All teams',
+        run: () => openDashboard(null),
+      },
+      ...teams.map((t) => ({
+        id: `dashboard-${t.id}`,
+        group: 'Dashboards',
+        label: `${t.name} dashboard`,
+        run: () => openDashboard(t.id),
+      })),
       ...teams.map((t) => ({
         id: `board-${t.id}`,
         group: 'Open board',
@@ -342,6 +367,7 @@ export function ItemsScreen() {
     currentItem,
     teams,
     openBoard,
+    openDashboard,
     singleKeys,
     showHud,
     store,
@@ -379,7 +405,7 @@ export function ItemsScreen() {
       if (mod || event.altKey) return
       // Letters and symbols are single-key shortcuts; Escape, arrows and Enter always work.
       if (!singleKeys && event.key.length === 1) return
-      if (route.page === 'inbox') {
+      if (route.page === 'inbox' || route.page === 'dashboard' || route.page === 'dashboards') {
         if (event.key === 'Escape') {
           event.preventDefault()
           backToList()
@@ -548,6 +574,14 @@ export function ItemsScreen() {
             List
           </button>
         )}
+        {route.page !== 'dashboard' && route.page !== 'dashboards' && (
+          <button
+            className="button"
+            onClick={() => openDashboard(currentTeam?.id ?? teams[0]?.id ?? null)}
+          >
+            Dashboard
+          </button>
+        )}
         <button className="button" onClick={() => setPalette('all')}>
           Commands <kbd>Ctrl K</kbd>
         </button>
@@ -565,6 +599,19 @@ export function ItemsScreen() {
           onBack={backToList}
           onOpenRecord={openRecord}
         />
+      ) : route.page === 'dashboard' ? (
+        <TeamDashboard
+          key={route.teamId}
+          api={api}
+          teamId={route.teamId}
+          teams={teams}
+          users={users}
+          onOpenItem={openItem}
+          onTeamChange={openDashboard}
+          onOpenAllTeams={() => openDashboard(null)}
+        />
+      ) : route.page === 'dashboards' ? (
+        <AllTeams api={api} onOpenTeam={openDashboard} />
       ) : route.page === 'inbox' ? (
         <Inbox
           entries={inbox?.entries ?? null}
