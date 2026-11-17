@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Stage } from '@wm/shared'
 import {
+  splitMoves,
   buildStageStrip,
   itemHash,
   parseRoute,
@@ -84,5 +85,31 @@ describe('shortDuration', () => {
     expect(shortDuration(5.9)).toBe('5 h')
     expect(shortDuration(47)).toBe('47 h')
     expect(shortDuration(72)).toBe('3 d')
+  })
+})
+
+describe('splitMoves', () => {
+  const st = (key: string, position: number, category = 'in_progress' as const) => ({
+    key,
+    position,
+    category,
+  })
+  it('offers the nearest later stage as the main button and everything else in More', () => {
+    const moves = [
+      st('dropped', 9, 'cancelled' as never),
+      st('publish', 7),
+      st('review', 5),
+      st('processing', 3),
+    ]
+    const { forward, others } = splitMoves(moves, { position: 4 })
+    expect(forward?.key).toBe('review')
+    expect(others.map((m) => m.key)).toEqual(['processing', 'publish', 'dropped'])
+  })
+  it('has no main button when the only later move is a cancelled stage', () => {
+    const { forward, others } = splitMoves([st('dropped', 9, 'cancelled' as never)], {
+      position: 4,
+    })
+    expect(forward).toBeNull()
+    expect(others).toHaveLength(1)
   })
 })

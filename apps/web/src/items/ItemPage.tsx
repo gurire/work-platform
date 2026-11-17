@@ -7,7 +7,28 @@ import {
   type UserPrincipal,
 } from '@wm/shared'
 import type { Api, ApiTeam, ApiUser, Me, Workflow, WorkflowStep } from './api'
-import { buildStageStrip, timeAgo, type HistoryEntry } from './item-model'
+import {
+  buildStageStrip,
+  shortDuration,
+  splitMoves,
+  timeAgo,
+  type HistoryEntry,
+} from './item-model'
+import {
+  ArrowRight,
+  CalendarClock,
+  Check,
+  ChevronDown,
+  CircleDot,
+  Clock,
+  Eye,
+  Shapes,
+  Signal,
+  Tag,
+  UserRound,
+  Users,
+} from 'lucide-react'
+import { Avatar, KindIcon, PriorityIcon, StageChip, TeamTile, stageLook } from '../ui/kit'
 import { CodePanel } from './CodePanel'
 import { CommentsPanel } from './CommentsPanel'
 import { RecordCard } from './RecordCard'
@@ -26,6 +47,10 @@ interface Props {
   onBack: () => void
   onOpenRecord: (id: string) => void
 }
+
+/** Oldest first, by when each stage was entered. */
+const sortHistory = (entries: readonly HistoryEntry[]) =>
+  [...entries].sort((a, b) => a.enteredAt.localeCompare(b.enteredAt))
 
 const message = (error: unknown) =>
   error instanceof Error ? error.message : 'something went wrong'
@@ -97,7 +122,7 @@ export function ItemPage({
       ([nextWorkflow, nextHistory]) => {
         if (cancelled) return
         setWorkflow(nextWorkflow)
-        setHistory(nextHistory)
+        setHistory(sortHistory(nextHistory))
       },
       (error: unknown) => {
         if (!cancelled) store.toast(`Could not load this item's stages: ${message(error)}.`)
@@ -194,15 +219,42 @@ export function ItemPage({
     .filter((s): s is NonNullable<typeof s> => s !== undefined)
     .sort((a, b) => a.position - b.position)
   const canMove = allowed(fromEnd ? 'item.reopen' : 'item.transition')
+  const { forward, others } = splitMoves(moves, current)
+  const owner = item.assigneeId ? nameOf(item.assigneeId) : null
+  // How long it has waited in this stage, against the stage's target (specs/stage-limits.md).
+  const enteredAt = history.at(-1)?.enteredAt
+  const waitedHours = enteredAt ? (Date.now() - new Date(enteredAt).getTime()) / 3_600_000 : null
+  const targetHours =
+    team?.stageLimits.find((l) => l.stageKey === item.statusId)?.targetHours ?? null
+  const late = waitedHours !== null && targetHours !== null && waitedHours > targetHours
+  const doneCount = workflow
+    ? workflow.steps.filter((s) => s.ticked).length +
+      workflow.requiredFields.filter((f) => String(item.fields[f.key] ?? '').trim() !== '').length
+    : 0
+  const totalCount = workflow ? workflow.steps.length + workflow.requiredFields.length : 0
+  const shownStrip = strip.filter(
+    (s) =>
+      !(
+        s.ended &&
+        s.state === 'upcoming' &&
+        stages.find((st) => st.key === s.key)?.category === 'cancelled'
+      ),
+  )
 
   return (
-    <main className="item-page" aria-labelledby="item-title">
+    <main className="item-page item-v2" aria-labelledby="item-title">
       <div className="item-crumbs">
-        <button type="button" className="link-button" onClick={onBack}>
+        <button type="button" className="crumb" onClick={onBack}>
+          {team && <TeamTile id={team.id} name={team.name} size={16} />}
           {team?.name ?? item.teamId}
         </button>
-        <span aria-hidden="true">/</span>
-        <span>{item.key}</span>
+        <span aria-hidden="true" className="muted">
+          /
+        </span>
+        <span className="crumb-key">
+          <KindIcon kind={item.kind} />
+          {item.key}
+        </span>
         <span className="item-crumbs-end muted">
           {positionLabel ? `${positionLabel} · ` : ''}J / K next and previous · Esc back
         </span>
@@ -212,52 +264,98 @@ export function ItemPage({
         {item.title}
       </h1>
 
-      <ol className="stage-strip" aria-label="Stages">
-        {strip.map((s) => (
+      <div className="pill-row" aria-label="Key details">
+        <StageChip look={stageLook(stages, item.statusId)} />
+        <span className="pill">
+          <PriorityIcon level={priority} />
+          {SAMPLE_PRIORITIES[priority] ?? 'None'}
+        </span>
+        <span className="pill">
+          <Avatar name={owner} id={item.assigneeId} size={18} />
+          {owner ?? 'Unassigned'}
+        </span>
+        {waitedHours !== null && !fromEnd && (
+          <span
+            className={late ? 'pill chip late' : 'pill'}
+            title={targetHours ? `Target ${shortDuration(targetHours)}` : undefined}
+          >
+            <Clock size={13} aria-hidden="true" />
+            {shortDuration(waitedHours)} in {current?.name ?? 'this stage'}
+            {late ? ' · past target' : ''}
+          </span>
+        )}
+        <span className="pill muted">Created {timeAgo(item.createdAt)}</span>
+      </div>
+
+      <ol className="stepper" aria-label="Stages">
+        {shownStrip.map((s) => (
           <li
             key={s.key}
-            className={`stage-step stage-${s.state}${s.ended ? ' stage-ended' : ''}`}
+            className={`step step-${s.state}${s.ended ? ' step-end' : ''}`}
             aria-current={s.state === 'current' ? 'step' : undefined}
           >
-            <span className="stage-state">
-              {s.state === 'current'
-                ? s.passes > 1
-                  ? `Now, pass ${s.passes}`
-                  : 'Now'
-                : s.state === 'visited'
-                  ? 'Done'
-                  : 'Not yet'}
+            <span className="step-dot" aria-hidden="true">
+              {s.state === 'visited' && <Check size={12} strokeWidth={3} />}
             </span>
-            <span className="stage-name">{s.name}</span>
-            <span className="stage-owner">{s.state === 'upcoming' ? '' : nameOf(s.ownerId)}</span>
+            <span className="step-name">
+              {s.name}
+              {s.state === 'current' && s.passes > 1 && (
+                <span className="step-pass">pass {s.passes}</span>
+              )}
+            </span>
+            <span className="step-owner">
+              {s.state === 'upcoming' ? '' : (nameOf(s.ownerId) ?? '')}
+            </span>
+            <span className="sr-only">
+              {s.state === 'current'
+                ? 'current stage'
+                : s.state === 'visited'
+                  ? 'done'
+                  : 'not reached yet'}
+            </span>
           </li>
         ))}
       </ol>
 
       <div className="item-columns">
         <div className="item-main">
-          <section className="panel" aria-labelledby="req-title">
+          <section className="panel next-card" aria-labelledby="req-title">
             <div className="panel-head">
               <h2 id="req-title">
-                {fromEnd ? 'This item is finished' : 'Before this can move on'}
+                {fromEnd
+                  ? `${current?.name ?? 'Finished'}: this item is finished`
+                  : forward
+                    ? `To send this to ${forward.name}`
+                    : 'Before this can move on'}
               </h2>
-              {workflow && !fromEnd && (
+              {workflow && !fromEnd && totalCount > 0 && (
                 <span className="muted">
-                  {missing.length === 0
-                    ? 'Everything is done.'
-                    : `${missing.length} left: ${missing.join(', ')}`}
+                  {doneCount} of {totalCount} done
                 </span>
               )}
             </div>
+            {workflow && !fromEnd && totalCount > 0 && (
+              <div
+                className="progress"
+                role="progressbar"
+                aria-label="Requirements done"
+                aria-valuemin={0}
+                aria-valuemax={totalCount}
+                aria-valuenow={doneCount}
+              >
+                <span style={{ width: `${(doneCount / totalCount) * 100}%` }} />
+              </div>
+            )}
             {!workflow && <p className="muted">Loading…</p>}
             {workflow &&
               workflow.steps.length === 0 &&
               workflow.requiredFields.length === 0 &&
-              !workflow.review && (
+              !workflow.review &&
+              !fromEnd && (
                 <p className="muted">{current?.name ?? 'This stage'} has no requirements.</p>
               )}
             {workflow?.steps.map((step) => (
-              <label key={step.id} className="check-row">
+              <label key={step.id} className={step.ticked ? 'check-row check-done' : 'check-row'}>
                 <input
                   type="checkbox"
                   checked={step.ticked}
@@ -293,60 +391,95 @@ export function ItemPage({
                 />
               </label>
             ))}
+            {workflow && missing.includes(REVIEW_REQUIREMENT) && (
+              <p className="needs-review">
+                <Eye size={14} aria-hidden="true" /> Needs an approved review (below).
+              </p>
+            )}
 
             <div className="move-row" aria-label="Move this item">
+              {canMove && fromEnd && moves.length > 0 && (
+                <MoveMenu
+                  label="Reopen…"
+                  items={moves.map((to) => ({
+                    key: to.key,
+                    label: `Reopen to ${to.name}`,
+                    run: () => setPending({ to: to.key, mode: 'reopen' }),
+                  }))}
+                  disabled={moving}
+                />
+              )}
               {canMove &&
-                moves.map((to) => {
-                  const forward =
-                    !!current && to.position > current.position && to.category !== 'cancelled'
-                  if (fromEnd) {
-                    return (
-                      <button
-                        key={to.key}
-                        type="button"
-                        className="button"
-                        disabled={moving}
-                        onClick={() => setPending({ to: to.key, mode: 'reopen' })}
-                      >
-                        Reopen to {to.name}
-                      </button>
-                    )
-                  }
-                  if (forward && missing.length > 0) {
-                    return workflow?.canForce ? (
-                      <button
-                        key={to.key}
-                        type="button"
-                        className="button"
-                        disabled={moving}
-                        onClick={() => setPending({ to: to.key, mode: 'force' })}
-                      >
-                        Force to {to.name}
-                      </button>
-                    ) : (
-                      <button
-                        key={to.key}
-                        type="button"
-                        className="button"
-                        disabled
-                        title={`Still needed: ${missing.join(', ')}`}
-                      >
-                        {to.name} · {missing.length} left
-                      </button>
-                    )
-                  }
-                  return (
-                    <button
-                      key={to.key}
-                      type="button"
-                      className={forward ? 'button button-primary' : 'button'}
-                      disabled={moving}
-                      onClick={() => void moveTo(to.key)}
-                    >
-                      {forward ? `Send to ${to.name}` : `Move to ${to.name}`}
-                    </button>
-                  )
-                })}
+                !fromEnd &&
+                forward &&
+                (missing.length > 0 ? (
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    disabled
+                    title={`Still needed: ${missing.join(', ')}`}
+                  >
+                    Send to {forward.name} · {missing.length} left
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    disabled={moving}
+                    onClick={() => void moveTo(forward.key)}
+                  >
+                    Send to {forward.name} <ArrowRight size={14} aria-hidden="true" />
+                  </button>
+                ))}
+              {canMove &&
+                !fromEnd &&
+                (others.length > 0 || (forward && missing.length > 0 && workflow?.canForce)) && (
+                  <MoveMenu
+                    label="More"
+                    disabled={moving}
+                    items={[
+                      ...(forward && missing.length > 0 && workflow?.canForce
+                        ? [
+                            {
+                              key: `force-${forward.key}`,
+                              label: `Force to ${forward.name} (needs a reason)`,
+                              run: () => setPending({ to: forward.key, mode: 'force' as const }),
+                            },
+                          ]
+                        : []),
+                      ...others.map((to): MoveMenuItem => {
+                        const ahead =
+                          !!current && to.position > current.position && to.category !== 'cancelled'
+                        if (ahead && missing.length > 0) {
+                          return workflow?.canForce
+                            ? {
+                                key: to.key,
+                                label: `Force to ${to.name} (needs a reason)`,
+                                run: () => setPending({ to: to.key, mode: 'force' as const }),
+                              }
+                            : {
+                                key: to.key,
+                                label: `${to.name} · ${missing.length} left`,
+                                run: null,
+                              }
+                        }
+                        return {
+                          key: to.key,
+                          label:
+                            to.category === 'cancelled'
+                              ? `Drop (move to ${to.name})`
+                              : ahead
+                                ? `Skip ahead to ${to.name}`
+                                : `Move back to ${to.name}`,
+                          danger: to.category === 'cancelled',
+                          run: () => {
+                            void moveTo(to.key)
+                          },
+                        }
+                      }),
+                    ]}
+                  />
+                )}
               {!canMove && <span className="muted">You can view this item but not move it.</span>}
             </div>
 
@@ -405,14 +538,21 @@ export function ItemPage({
 
           <section className="panel" aria-labelledby="activity-title">
             <h2 id="activity-title">Stage history</h2>
-            <ul className="activity">
+            <ul className="activity timeline">
               {[...history].reverse().map((entry, index) => (
                 <li key={`${entry.enteredAt}-${index}`}>
+                  <Avatar
+                    name={entry.movedBy ? nameOf(entry.movedBy) : null}
+                    id={entry.movedBy}
+                    size={20}
+                  />
                   <span>
                     {entry.kind === 'automatic'
                       ? `Moved automatically to ${stageName(entry.stageKey)}`
                       : entry.movedBy === null
-                        ? `Started in ${stageName(entry.stageKey)}`
+                        ? index === history.length - 1
+                          ? `Started in ${stageName(entry.stageKey)}`
+                          : `Moved to ${stageName(entry.stageKey)}`
                         : entry.kind === 'forced'
                           ? `${nameOf(entry.movedBy)} forced it to ${stageName(entry.stageKey)}`
                           : entry.kind === 'reopen'
@@ -433,13 +573,18 @@ export function ItemPage({
         </div>
 
         <aside className="item-side" aria-label="Details">
-          <dl className="details">
-            <dt>Stage</dt>
-            <dd>{current?.name ?? item.statusId}</dd>
+          <dl className="details rail">
             <dt>
-              <label htmlFor="owner-select">Owner</label>
+              <CircleDot size={14} aria-hidden="true" /> Stage
             </dt>
             <dd>
+              <StageChip look={stageLook(stages, item.statusId)} />
+            </dd>
+            <dt>
+              <UserRound size={14} aria-hidden="true" /> <label htmlFor="owner-select">Owner</label>
+            </dt>
+            <dd className="with-avatar">
+              <Avatar name={owner} id={item.assigneeId} size={20} />
               <select
                 id="owner-select"
                 value={item.assigneeId ?? ''}
@@ -456,24 +601,128 @@ export function ItemPage({
                 ))}
               </select>
             </dd>
-            <dt>Team</dt>
-            <dd>{team?.name ?? item.teamId}</dd>
-            <dt>Kind</dt>
-            <dd>{item.kind}</dd>
-            <dt>Priority</dt>
-            <dd>{SAMPLE_PRIORITIES[priority] ?? 'None'}</dd>
+            <dt>
+              <Signal size={14} aria-hidden="true" />{' '}
+              <label htmlFor="priority-select">Priority</label>
+            </dt>
+            <dd className="with-avatar">
+              <PriorityIcon level={priority} />
+              <select
+                id="priority-select"
+                value={priority}
+                disabled={!allowed('item.edit')}
+                onChange={(event) =>
+                  store.mutate(item.id, { priority: Number(event.target.value) })
+                }
+              >
+                {[4, 3, 2, 1, 0].map((level) => (
+                  <option key={level} value={level}>
+                    {SAMPLE_PRIORITIES[level] ?? 'None'}
+                  </option>
+                ))}
+              </select>
+            </dd>
+            <dt>
+              <Users size={14} aria-hidden="true" /> Team
+            </dt>
+            <dd className="with-avatar">
+              {team && <TeamTile id={team.id} name={team.name} size={18} />}
+              {team?.name ?? item.teamId}
+            </dd>
+            <dt>
+              <Shapes size={14} aria-hidden="true" /> Kind
+            </dt>
+            <dd className="with-avatar">
+              <KindIcon kind={item.kind} />
+              {item.kind[0]?.toUpperCase() + item.kind.slice(1)}
+            </dd>
             {otherFields.map(([key, value]) => (
               <div key={key} className="details-pair">
-                <dt>{key}</dt>
+                <dt>
+                  <Tag size={14} aria-hidden="true" /> {key}
+                </dt>
                 <dd>{String(value ?? '')}</dd>
               </div>
             ))}
-            <dt>Created</dt>
+            <dt>
+              <CalendarClock size={14} aria-hidden="true" /> Created
+            </dt>
             <dd>{timeAgo(item.createdAt)}</dd>
           </dl>
           <RecordCard api={api} store={store} item={item} onOpenRecord={onOpenRecord} />
         </aside>
       </div>
     </main>
+  )
+}
+
+interface MoveMenuItem {
+  readonly key: string
+  readonly label: string
+  readonly danger?: boolean
+  /** Null shows the entry but disabled, with the reason in its label. */
+  readonly run: (() => void) | null
+}
+
+/** A small menu of less common moves, so the page has one obvious main button. */
+function MoveMenu({
+  label,
+  items,
+  disabled,
+}: {
+  label: string
+  items: readonly MoveMenuItem[]
+  disabled: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    const close = (event: KeyboardEvent | MouseEvent) => {
+      if (event instanceof KeyboardEvent) {
+        if (event.key !== 'Escape') return
+        // Close the menu only; Escape must not also leave the page.
+        event.stopPropagation()
+        setOpen(false)
+      } else if (!(event.target as HTMLElement).closest('.move-menu')) setOpen(false)
+    }
+    document.addEventListener('keydown', close)
+    document.addEventListener('mousedown', close)
+    return () => {
+      document.removeEventListener('keydown', close)
+      document.removeEventListener('mousedown', close)
+    }
+  }, [open])
+  return (
+    <div className="move-menu">
+      <button
+        type="button"
+        className="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {label} <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="menu" role="menu">
+          {items.map((entry) => (
+            <button
+              key={entry.key}
+              type="button"
+              role="menuitem"
+              className={entry.danger ? 'menu-item menu-danger' : 'menu-item'}
+              disabled={entry.run === null}
+              onClick={() => {
+                setOpen(false)
+                entry.run?.()
+              }}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

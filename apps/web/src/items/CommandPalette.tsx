@@ -10,13 +10,15 @@ export interface Command {
 
 interface Props {
   title: string
+  /** What the commands act on, e.g. "DATA-5 · Validation", shown above the box. */
+  context?: string | undefined
   commands: readonly Command[]
   /** Builds extra commands from what the user typed, e.g. "Go to ENG-42". */
   dynamic?: (query: string) => readonly Command[]
   onClose: () => void
 }
 
-export function CommandPalette({ title, commands, dynamic, onClose }: Props) {
+export function CommandPalette({ title, context, commands, dynamic, onClose }: Props) {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -69,6 +71,11 @@ export function CommandPalette({ title, commands, dynamic, onClose }: Props) {
         onMouseDown={(event) => event.stopPropagation()}
         onKeyDown={onKeyDown}
       >
+        {context && (
+          <div className="palette-context">
+            Acting on <b>{context}</b>
+          </div>
+        )}
         <input
           ref={inputRef}
           className="palette-input"

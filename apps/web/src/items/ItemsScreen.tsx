@@ -939,6 +939,11 @@ export function ItemsScreen() {
                     ? 'Assign to'
                     : 'Set priority'
             }
+            context={
+              palette !== 'all' && currentItem
+                ? `${currentItem.key} · ${stageLooks.get(`${currentItem.teamId}:${currentItem.statusId}`)?.name ?? currentItem.statusId}`
+                : undefined
+            }
             commands={commands}
             dynamic={dynamicCommands}
             onClose={() => setPalette(null)}
