@@ -10,6 +10,8 @@ import {
 } from '@wm/shared'
 import type { Api, ApiTeam, ApiUser, Me } from './api'
 import { shortDuration } from './item-model'
+import { Avatar, KindIcon, PriorityIcon } from '../ui/kit'
+import { ChevronLeft, ChevronRight, Clock, Ellipsis } from 'lucide-react'
 import type { ItemStore } from './store'
 
 interface Props {
@@ -36,6 +38,17 @@ export function Board({ api, store, teamId, teams, users, me, onOpenItem, onTeam
   const [dragging, setDragging] = useState<string | null>(null)
   const [over, setOver] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
+  // Finished and dropped stages start folded, so the working stages get the room.
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set())
+  const [menuFor, setMenuFor] = useState<string | null>(null)
+  useEffect(() => {
+    if (!menuFor) return
+    const close = (event: MouseEvent) => {
+      if (!(event.target as HTMLElement).closest('.card-menu')) setMenuFor(null)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [menuFor])
   const [limitDraft, setLimitDraft] = useState({ itemLimit: '', targetHours: '' })
   const [limitsOverride, setLimitsOverride] = useState<
     Record<string, { itemLimit: number | null; targetHours: number | null }>
@@ -102,7 +115,11 @@ export function Board({ api, store, teamId, teams, users, me, onOpenItem, onTeam
     const id = dragging
     setDragging(null)
     setOver(null)
-    if (!id) return
+    if (id) moveItem(id, stageKey)
+  }
+
+  /** Drag and the card's "Move to" menu both end here (WCAG 2.5.7: dragging is never the only way). */
+  function moveItem(id: string, stageKey: string) {
     const item = store.getItem(id)
     if (!item || item.statusId === stageKey) return
     const allowed = allowedDestinations(stages, item.statusId, team?.transitions ?? [])
@@ -130,6 +147,27 @@ export function Board({ api, store, teamId, teams, users, me, onOpenItem, onTeam
     }
   }
 
+  // Summary strip: what needs attention on this board right now.
+  const working = stages.filter((stage) => !isEndStage(stage))
+  const openCount = working.reduce((sum, stage) => sum + (byStage.get(stage.key)?.length ?? 0), 0)
+  let pastTarget = 0
+  for (const stage of working) {
+    const { targetHours } = limitsOf(stage.key)
+    if (targetHours === null) continue
+    for (const item of byStage.get(stage.key) ?? []) {
+      const entered = enteredAt[item.id]
+      if (entered && waiting(entered, targetHours, now).overdue) pastTarget++
+    }
+  }
+  const overLimit = working.filter(
+    (stage) =>
+      stageLoad(byStage.get(stage.key)?.length ?? 0, limitsOf(stage.key).itemLimit) ===
+      'over_limit',
+  )
+  const finished = stages
+    .filter((stage) => stage.category === 'done')
+    .reduce((sum, stage) => sum + (byStage.get(stage.key)?.length ?? 0), 0)
+
   return (
     <main className="board-page" aria-label={`${team.name} board`}>
       <div className="board-head">
@@ -143,9 +181,36 @@ export function Board({ api, store, teamId, teams, users, me, onOpenItem, onTeam
             ))}
           </select>
         </label>
-        <span className="muted">
-          {items.length.toLocaleString()} items · drag a card to move it · Esc back to the list
-        </span>
+        <div className="board-summary" aria-label="Board summary">
+          <span>
+            <b>{openCount.toLocaleString()}</b> open
+          </span>
+          <span className={pastTarget > 0 ? 'summary-bad' : undefined}>
+            <b>{pastTarget}</b> past target
+          </span>
+          <span className={overLimit.length > 0 ? 'summary-bad' : undefined}>
+            <b>{overLimit.length}</b> stage{overLimit.length === 1 ? '' : 's'} over limit
+            {overLimit.length > 0 ? ` (${overLimit.map((s) => s.name).join(', ')})` : ''}
+          </span>
+          <span>
+            <b>{finished.toLocaleString()}</b> finished
+          </span>
+        </div>
+        <div className="board-key muted" aria-label="Key">
+          <span>
+            <i className="key-bar key-ok" /> under limit
+          </span>
+          <span>
+            <i className="key-bar key-at" /> at limit
+          </span>
+          <span>
+            <i className="key-bar key-over" /> over limit
+          </span>
+          <span>
+            <Clock size={12} aria-hidden="true" className="late-text" /> past target
+          </span>
+          <span>Drag a card, or use its ⋯ menu</span>
+        </div>
       </div>
 
       <div className="board">
@@ -154,29 +219,84 @@ export function Board({ api, store, teamId, teams, users, me, onOpenItem, onTeam
           const { itemLimit, targetHours } = limitsOf(stage.key)
           const load = stageLoad(cards.length, itemLimit)
           const end = isEndStage(stage)
+          const folded = end && !unfolded.has(stage.key)
+          const dropProps = {
+            onDragOver: (event: React.DragEvent) => {
+              if (!dragging) return
+              event.preventDefault()
+              setOver(stage.key)
+            },
+            onDragLeave: () => setOver((key) => (key === stage.key ? null : key)),
+            onDrop: (event: React.DragEvent) => {
+              event.preventDefault()
+              drop(stage.key)
+            },
+          }
+          if (folded) {
+            return (
+              <section
+                key={stage.key}
+                className={`board-column board-folded${over === stage.key ? ' board-drop' : ''}`}
+                aria-label={`${stage.name}, ${cards.length} items, folded`}
+                {...dropProps}
+              >
+                <button
+                  type="button"
+                  className="fold-button"
+                  aria-expanded="false"
+                  onClick={() => setUnfolded((all) => new Set([...all, stage.key]))}
+                  title={`Show ${stage.name}`}
+                >
+                  <ChevronRight size={14} aria-hidden="true" />
+                  <span className="fold-name">{stage.name}</span>
+                  <span className="board-count">{cards.length.toLocaleString()}</span>
+                </button>
+              </section>
+            )
+          }
           return (
             <section
               key={stage.key}
               className={`board-column${end ? ' board-column-end' : ''}${over === stage.key ? ' board-drop' : ''}`}
               aria-label={stage.name}
-              onDragOver={(event) => {
-                if (!dragging) return
-                event.preventDefault()
-                setOver(stage.key)
-              }}
-              onDragLeave={() => setOver((key) => (key === stage.key ? null : key))}
-              onDrop={(event) => {
-                event.preventDefault()
-                drop(stage.key)
-              }}
+              {...dropProps}
             >
               <header className="board-column-head">
+                {end && (
+                  <button
+                    type="button"
+                    className="fold-inline"
+                    aria-expanded="true"
+                    aria-label={`Fold ${stage.name}`}
+                    onClick={() =>
+                      setUnfolded((all) => {
+                        const next = new Set(all)
+                        next.delete(stage.key)
+                        return next
+                      })
+                    }
+                  >
+                    <ChevronLeft size={14} aria-hidden="true" />
+                  </button>
+                )}
                 <span className="stage-name">{stage.name}</span>
                 <span className={`board-count load-${load}`}>
                   {cards.length}
                   {itemLimit !== null ? ` / ${itemLimit}` : ''}
                 </span>
               </header>
+              {itemLimit !== null && (
+                <div
+                  className={`limit-bar load-bar-${load}`}
+                  role="meter"
+                  aria-label={`${cards.length} of ${itemLimit} item limit`}
+                  aria-valuemin={0}
+                  aria-valuemax={itemLimit}
+                  aria-valuenow={cards.length}
+                >
+                  <span style={{ width: `${Math.min(100, (cards.length / itemLimit) * 100)}%` }} />
+                </div>
+              )}
               {(targetHours !== null || (canConfigure && !end)) && (
                 <div className="board-column-meta muted">
                   {targetHours !== null ? `Target ${shortDuration(targetHours)}` : ''}
@@ -244,11 +364,17 @@ export function Board({ api, store, teamId, teams, users, me, onOpenItem, onTeam
                 {cards.slice(0, CARDS_PER_COLUMN).map((item) => {
                   const entered = enteredAt[item.id]
                   const wait = entered && !end ? waiting(entered, targetHours, now) : null
+                  const priority = Number(item.fields.priority ?? 0)
+                  const owner = item.assigneeId ? nameOf(item.assigneeId) : null
+                  const destinations = canMove
+                    ? allowedDestinations(stages, item.statusId, team.transitions ?? [])
+                        .map((key) => stages.find((s) => s.key === key))
+                        .filter((s): s is NonNullable<typeof s> => s !== undefined)
+                    : []
                   return (
                     <li key={item.id}>
-                      <button
-                        type="button"
-                        className={`board-card${dragging === item.id ? ' board-card-dragging' : ''}`}
+                      <div
+                        className={`board-card${dragging === item.id ? ' board-card-dragging' : ''}${wait?.overdue ? ' board-card-late' : ''}`}
                         draggable={canMove}
                         onDragStart={(event) => {
                           event.dataTransfer.effectAllowed = 'move'
@@ -259,26 +385,83 @@ export function Board({ api, store, teamId, teams, users, me, onOpenItem, onTeam
                           setDragging(null)
                           setOver(null)
                         }}
-                        onClick={() => onOpenItem(item.key)}
                       >
-                        <span className="board-card-key">{item.key}</span>
-                        <span className="board-card-title">{item.title}</span>
-                        <span className="board-card-foot">
-                          <span className="muted">{nameOf(item.assigneeId)}</span>
-                          {wait && (
-                            <span
-                              className={wait.overdue ? 'board-wait overdue' : 'board-wait'}
-                              title={
-                                wait.overdue
-                                  ? `Waiting longer than the ${shortDuration(targetHours ?? 0)} target`
-                                  : 'Time in this stage'
-                              }
-                            >
-                              {shortDuration(wait.hours)}
+                        <button
+                          type="button"
+                          className="card-open"
+                          onClick={() => onOpenItem(item.key)}
+                        >
+                          <span className="card-top">
+                            <KindIcon kind={item.kind} />
+                            <span className="board-card-key">{item.key}</span>
+                            <PriorityIcon level={priority} />
+                          </span>
+                          <span className="board-card-title">{item.title}</span>
+                          <span className="board-card-foot">
+                            <span className="person">
+                              <Avatar name={owner} id={item.assigneeId} size={18} />
+                              <span className="muted">{owner ?? 'Unassigned'}</span>
                             </span>
-                          )}
-                        </span>
-                      </button>
+                            {wait && (
+                              <span
+                                className={wait.overdue ? 'board-wait overdue' : 'board-wait'}
+                                title={
+                                  wait.overdue
+                                    ? `Waiting longer than the ${shortDuration(targetHours ?? 0)} target`
+                                    : 'Time in this stage'
+                                }
+                              >
+                                {wait.overdue && <Clock size={11} aria-hidden="true" />}
+                                {shortDuration(wait.hours)}
+                                {wait.overdue && <span className="sr-only"> past target</span>}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                        {destinations.length > 0 && (
+                          <div className="card-menu">
+                            <button
+                              type="button"
+                              className="card-menu-button"
+                              aria-label={`Move ${item.key} to…`}
+                              aria-haspopup="menu"
+                              aria-expanded={menuFor === item.id}
+                              onClick={() => setMenuFor((id) => (id === item.id ? null : item.id))}
+                            >
+                              <Ellipsis size={14} aria-hidden="true" />
+                            </button>
+                            {menuFor === item.id && (
+                              <div
+                                className="menu"
+                                role="menu"
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Escape') {
+                                    event.stopPropagation()
+                                    setMenuFor(null)
+                                  }
+                                }}
+                              >
+                                <span className="menu-title">Move to</span>
+                                {destinations.map((to) => (
+                                  <button
+                                    key={to.key}
+                                    type="button"
+                                    role="menuitem"
+                                    className="menu-item"
+                                    autoFocus={to === destinations[0]}
+                                    onClick={() => {
+                                      setMenuFor(null)
+                                      moveItem(item.id, to.key)
+                                    }}
+                                  >
+                                    {to.name}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </li>
                   )
                 })}

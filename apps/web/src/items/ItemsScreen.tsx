@@ -363,6 +363,12 @@ export function ItemsScreen() {
     },
     [refreshInbox],
   )
+  const markOneRead = useCallback(
+    (entry: InboxEntry) => {
+      void api.markRead([entry.id]).then(refreshInbox, refreshInbox)
+    },
+    [refreshInbox],
+  )
   const markAllRead = useCallback(() => {
     void api.markRead().then(refreshInbox, refreshInbox)
   }, [refreshInbox])
@@ -773,6 +779,7 @@ export function ItemsScreen() {
             entries={inbox?.entries ?? null}
             users={users}
             onOpen={openInboxEntry}
+            onMarkRead={markOneRead}
             onMarkAllRead={markAllRead}
           />
         ) : route.page === 'board' ? (

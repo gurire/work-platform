@@ -198,3 +198,11 @@ ran the app before comments were added, delete `apps/api/.data` once.
   common moves (back, skip ahead, force, drop) are under **More**.
 - New comments start as **internal notes**; choose "Visible to clients" to share one.
 - The command palette (S, A, P on an item) says which item it is acting on.
+
+## Board and inbox
+
+- The **board** has a summary (open, past target, stages over limit, finished), a bar under
+  each limited stage, and a key. Finished and dropped stages start folded; click to open them.
+- Every card has a **⋯ menu** to move it without dragging.
+- The **inbox** groups entries by day, has tabs (Unread, Mentions, Reviews, Assigned), and each
+  unread entry has a tick to mark it read without opening it.

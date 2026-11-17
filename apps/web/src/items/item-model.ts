@@ -145,3 +145,16 @@ export function splitMoves<T extends Pick<Stage, 'key' | 'position' | 'category'
     null
   return { forward, others: sorted.filter((s) => s !== forward) }
 }
+
+/** Inbox day groups: "Today", "Yesterday", "This week", then "Earlier". Local time. */
+export function dayGroup(iso: string, now: number = Date.now()): string {
+  const day = (ms: number) => {
+    const d = new Date(ms)
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  }
+  const diff = Math.round((day(now) - day(new Date(iso).getTime())) / 86_400_000)
+  if (diff <= 0) return 'Today'
+  if (diff === 1) return 'Yesterday'
+  if (diff < 7) return 'This week'
+  return 'Earlier'
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Stage } from '@wm/shared'
 import {
+  dayGroup,
   splitMoves,
   buildStageStrip,
   itemHash,
@@ -111,5 +112,15 @@ describe('splitMoves', () => {
     })
     expect(forward).toBeNull()
     expect(others).toHaveLength(1)
+  })
+})
+
+describe('dayGroup', () => {
+  const now = new Date(2026, 10, 17, 15, 0).getTime()
+  it('groups by local calendar day', () => {
+    expect(dayGroup(new Date(2026, 10, 17, 0, 5).toISOString(), now)).toBe('Today')
+    expect(dayGroup(new Date(2026, 10, 16, 23, 59).toISOString(), now)).toBe('Yesterday')
+    expect(dayGroup(new Date(2026, 10, 12, 9, 0).toISOString(), now)).toBe('This week')
+    expect(dayGroup(new Date(2026, 10, 1, 9, 0).toISOString(), now)).toBe('Earlier')
   })
 })

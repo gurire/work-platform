@@ -1,11 +1,15 @@
 import type { InboxKind } from '@wm/shared'
 import type { ApiUser, InboxEntry } from './api'
-import { timeAgo } from './item-model'
+import { useState } from 'react'
+import { AtSign, Check, CheckCheck, Eye, MessageSquare, Undo2, UserCheck } from 'lucide-react'
+import { dayGroup, timeAgo } from './item-model'
+import { Avatar } from '../ui/kit'
 
 interface Props {
   entries: readonly InboxEntry[] | null
   users: readonly ApiUser[]
   onOpen: (entry: InboxEntry) => void
+  onMarkRead: (entry: InboxEntry) => void
   onMarkAllRead: () => void
 }
 
@@ -18,13 +22,46 @@ export const WHAT: Record<InboxKind, string> = {
   commented: 'commented on',
 }
 
-/** What needs you, newest first (specs/comments.md, section 4). */
-export function Inbox({ entries, users, onOpen, onMarkAllRead }: Props) {
+const ICON: Record<InboxKind, typeof AtSign> = {
+  mentioned: AtSign,
+  assigned: UserCheck,
+  review_requested: Eye,
+  review_approved: Check,
+  review_changes_requested: Undo2,
+  commented: MessageSquare,
+}
+
+type Filter = 'all' | 'unread' | 'mentions' | 'reviews' | 'assigned'
+
+const FILTERS: readonly { id: Filter; label: string; match: (e: InboxEntry) => boolean }[] = [
+  { id: 'all', label: 'All', match: () => true },
+  { id: 'unread', label: 'Unread', match: (e) => !e.read },
+  {
+    id: 'mentions',
+    label: 'Mentions',
+    match: (e) => e.kind === 'mentioned' || e.kind === 'commented',
+  },
+  { id: 'reviews', label: 'Reviews', match: (e) => e.kind.startsWith('review_') },
+  { id: 'assigned', label: 'Assigned', match: (e) => e.kind === 'assigned' },
+]
+
+/** What needs you, newest first, grouped by day (specs/comments.md, section 4). */
+export function Inbox({ entries, users, onOpen, onMarkRead, onMarkAllRead }: Props) {
+  const [filter, setFilter] = useState<Filter>('all')
   const nameOf = (id: string | null) =>
     id ? (users.find((u) => u.id === id)?.name ?? id) : 'Someone'
   const unread = entries?.filter((e) => !e.read).length ?? 0
+  const shown = (entries ?? []).filter(FILTERS.find((f) => f.id === filter)?.match ?? (() => true))
+  const now = Date.now()
+  const groups: { label: string; entries: InboxEntry[] }[] = []
+  for (const entry of shown) {
+    const label = dayGroup(entry.createdAt, now)
+    const last = groups.at(-1)
+    if (last?.label === label) last.entries.push(entry)
+    else groups.push({ label, entries: [entry] })
+  }
   return (
-    <main className="item-page" aria-labelledby="inbox-title">
+    <main className="item-page inbox-v2" aria-labelledby="inbox-title">
       <div className="panel-head">
         <h1 id="inbox-title" className="item-title">
           Inbox
@@ -32,35 +69,80 @@ export function Inbox({ entries, users, onOpen, onMarkAllRead }: Props) {
         <span className="muted">{unread} unread · Esc back</span>
         {unread > 0 && (
           <button type="button" className="button inbox-mark" onClick={onMarkAllRead}>
-            Mark all as read
+            <CheckCheck size={14} aria-hidden="true" /> Mark all as read
           </button>
         )}
       </div>
-      {!entries && <p className="muted">Loading…</p>}
-      {entries && entries.length === 0 && <p className="muted">Nothing needs you right now.</p>}
-      <ol className="inbox-list">
-        {(entries ?? []).map((entry) => (
-          <li key={entry.id}>
+      <div className="tabs inbox-tabs" role="tablist" aria-label="Show">
+        {FILTERS.map((f) => {
+          const count = (entries ?? []).filter(f.match).length
+          return (
             <button
-              type="button"
-              className={entry.read ? 'inbox-entry' : 'inbox-entry unread'}
-              onClick={() => onOpen(entry)}
+              key={f.id}
+              role="tab"
+              aria-selected={filter === f.id}
+              className={filter === f.id ? 'tab tab-active' : 'tab'}
+              onClick={() => setFilter(f.id)}
             >
-              <span className="inbox-line">
-                {!entry.read && <span className="inbox-dot" aria-label="Unread" />}
-                <strong>{nameOf(entry.actorId)}</strong> {WHAT[entry.kind]}{' '}
-                <strong>{entry.itemKey}</strong> <span className="muted">{entry.itemTitle}</span>
-              </span>
-              {entry.excerpt && (
-                <span className="inbox-excerpt muted">
-                  {entry.excerpt.replace(/@\[([^\]]+)\]\([^)]+\)/g, '@$1')}
-                </span>
-              )}
-              <span className="muted inbox-time">{timeAgo(entry.createdAt)}</span>
+              {f.label}
+              {f.id !== 'all' && count > 0 && <span className="tab-count">{count}</span>}
             </button>
-          </li>
-        ))}
-      </ol>
+          )
+        })}
+      </div>
+      {!entries && <p className="muted">Loading…</p>}
+      {entries && shown.length === 0 && (
+        <p className="inbox-empty muted">
+          {filter === 'all' ? 'Nothing needs you right now.' : 'Nothing here.'}
+        </p>
+      )}
+      {groups.map((group) => (
+        <section key={group.label} className="inbox-group" aria-label={group.label}>
+          <h2 className="inbox-day">{group.label}</h2>
+          <ol className="inbox-list">
+            {group.entries.map((entry) => {
+              const Icon = ICON[entry.kind]
+              const actor = nameOf(entry.actorId)
+              return (
+                <li key={entry.id} className={entry.read ? 'inbox-row' : 'inbox-row unread'}>
+                  <button type="button" className="inbox-entry" onClick={() => onOpen(entry)}>
+                    <span className="inbox-avatar">
+                      <Avatar name={actor} id={entry.actorId} size={30} />
+                      <span className={`inbox-badge badge-${entry.kind}`}>
+                        <Icon size={10} strokeWidth={2.5} aria-hidden="true" />
+                      </span>
+                    </span>
+                    <span className="inbox-text">
+                      <span className="inbox-line">
+                        {!entry.read && <span className="inbox-dot" aria-label="Unread" />}
+                        <strong>{actor}</strong> {WHAT[entry.kind]} <strong>{entry.itemKey}</strong>
+                      </span>
+                      <span className="inbox-title muted">{entry.itemTitle}</span>
+                      {entry.excerpt && (
+                        <span className="inbox-excerpt">
+                          {entry.excerpt.replace(/@\[([^\]]+)\]\([^)]+\)/g, '@$1')}
+                        </span>
+                      )}
+                    </span>
+                    <span className="muted inbox-time">{timeAgo(entry.createdAt)}</span>
+                  </button>
+                  {!entry.read && (
+                    <button
+                      type="button"
+                      className="inbox-read"
+                      aria-label={`Mark ${entry.itemKey} as read`}
+                      title="Mark as read"
+                      onClick={() => onMarkRead(entry)}
+                    >
+                      <Check size={14} aria-hidden="true" />
+                    </button>
+                  )}
+                </li>
+              )
+            })}
+          </ol>
+        </section>
+      ))}
     </main>
   )
 }
