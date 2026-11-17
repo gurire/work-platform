@@ -11,11 +11,31 @@ export interface EnvConfig {
   readonly prefix: string
   /** Dev data is disposable; prod data is retained when a stack is deleted. */
   readonly retainData: boolean
+  /**
+   * Addresses of the web app, for sign-in redirects (specs/sign-in.md). Each must end in "/".
+   * Prod's real address is set when hosting is built; until then it is a placeholder that
+   * cannot receive sign-ins, so prod sign-in cannot be misused.
+   */
+  readonly appUrls: readonly string[]
+  /** Prefix for the Cognito sign-in domain; must be unique in the region. */
+  readonly authDomainPrefix: string
 }
 
 export const ENVIRONMENTS: Record<EnvName, EnvConfig> = {
-  dev: { name: 'dev', prefix: 'wm-dev', retainData: false },
-  prod: { name: 'prod', prefix: 'wm-prod', retainData: true },
+  dev: {
+    name: 'dev',
+    prefix: 'wm-dev',
+    retainData: false,
+    appUrls: ['http://localhost:5173/'],
+    authDomainPrefix: 'gurire-wm-dev',
+  },
+  prod: {
+    name: 'prod',
+    prefix: 'wm-prod',
+    retainData: true,
+    appUrls: ['https://work-platform.invalid/'],
+    authDomainPrefix: 'gurire-wm-prod',
+  },
 }
 
 /** GitHub repository allowed to deploy through OIDC. */

@@ -2,6 +2,7 @@ import { Stage, Tags, type StageProps } from 'aws-cdk-lib'
 import type { Construct } from 'constructs'
 import type { EnvConfig } from './config.js'
 import { FoundationStack } from './foundation-stack.js'
+import { AuthStack } from './auth-stack.js'
 
 export interface AppStageProps extends StageProps {
   readonly config: EnvConfig
@@ -15,6 +16,11 @@ export class AppStage extends Stage {
 
     new FoundationStack(this, 'Foundation', {
       stackName: `${config.prefix}-foundation`,
+      config,
+    })
+
+    new AuthStack(this, 'Auth', {
+      stackName: `${config.prefix}-auth`,
       config,
     })
 

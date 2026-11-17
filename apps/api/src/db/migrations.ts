@@ -333,6 +333,16 @@ const MIGRATIONS: readonly { id: string; sql: string }[] = [
         CHECK (kind IN ('waiting', 'working', 'review', 'release'));
     `,
   },
+  {
+    // Sign-in (specs/sign-in.md, section 2). Expand only: two new nullable columns.
+    id: '0010_sign_in',
+    sql: `
+      ALTER TABLE users ADD COLUMN email text;
+      ALTER TABLE users ADD COLUMN auth_subject text;
+      CREATE UNIQUE INDEX users_email ON users (lower(email)) WHERE email IS NOT NULL;
+      CREATE UNIQUE INDEX users_auth_subject ON users (auth_subject) WHERE auth_subject IS NOT NULL;
+    `,
+  },
 ]
 
 export async function migrate(db: Db): Promise<string[]> {

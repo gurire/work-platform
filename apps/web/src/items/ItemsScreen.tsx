@@ -42,6 +42,7 @@ import { MyWork } from '../shell/MyWork'
 import { People } from '../shell/People'
 import '../shell/shell.css'
 import { TeamTile } from '../ui/kit'
+import { authConfig, idToken, signOut, startSignIn, tokenEmail } from '../auth/auth'
 
 const DENSITIES: readonly Density[] = ['compact', 'default', 'comfortable']
 const CATEGORIES: readonly { id: CategoryFilter; label: string }[] = [
@@ -63,7 +64,12 @@ function readDevUser(): string {
   }
 }
 let devUser = readDevUser()
-const api = createApi(() => devUser)
+const auth = authConfig()
+const api = createApi(
+  () => devUser,
+  auth ? () => idToken(auth) : undefined,
+  auth ? () => void startSignIn(auth) : undefined,
+)
 const store = new ItemStore(api.saveItem)
 
 interface LoadState {
@@ -699,6 +705,8 @@ export function ItemsScreen() {
         onCommands={() => setPalette('all')}
         themeChoice={themeChoice}
         onThemeChoice={setThemeChoice}
+        signedInAs={auth ? tokenEmail() : null}
+        onSignOut={auth ? () => signOut(auth) : null}
       />
       <div className={`shell density-${density}`}>
         <header className="toolbar">
