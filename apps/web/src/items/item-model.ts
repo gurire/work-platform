@@ -64,7 +64,8 @@ export function timeAgo(iso: string, now: number = Date.now()): string {
 }
 
 export type Route =
-  | { readonly page: 'list' }
+  | { readonly page: 'list'; readonly teamId?: string }
+  | { readonly page: 'me' }
   | { readonly page: 'item'; readonly key: string }
   | { readonly page: 'record'; readonly id: string }
   | { readonly page: 'board'; readonly teamId: string }
@@ -79,6 +80,9 @@ export function parseRoute(hash: string): Route {
   const record = /^#\/record\/([A-Za-z0-9_-]{1,80})$/.exec(hash)
   if (record?.[1]) return { page: 'record', id: record[1] }
   if (hash === '#/inbox') return { page: 'inbox' }
+  if (hash === '#/me') return { page: 'me' }
+  const team = /^#\/team\/([A-Za-z0-9_-]{1,64})$/.exec(hash)
+  if (team?.[1]) return { page: 'list', teamId: team[1] }
   if (hash === '#/dashboards') return { page: 'dashboards' }
   const dashboard = /^#\/dashboard\/([A-Za-z0-9_-]{1,64})$/.exec(hash)
   if (dashboard?.[1]) return { page: 'dashboard', teamId: dashboard[1] }
@@ -97,6 +101,10 @@ export function recordHash(id: string): string {
 
 export function dashboardHash(teamId: string | null): string {
   return teamId ? `#/dashboard/${encodeURIComponent(teamId)}` : '#/dashboards'
+}
+
+export function teamHash(teamId: string | null): string {
+  return teamId ? `#/team/${encodeURIComponent(teamId)}` : '#/'
 }
 
 export function boardHash(teamId: string): string {

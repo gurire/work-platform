@@ -112,9 +112,13 @@ kbd {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 16px;
-  background: var(--surface-sunken);
+  min-height: 52px;
+  padding: 8px 20px;
+  background: var(--surface-raised);
   border-bottom: 1px solid var(--border);
+}
+.toolbar-end {
+  margin-left: auto;
 }
 .tabs {
   display: flex;

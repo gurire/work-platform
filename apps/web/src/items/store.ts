@@ -34,6 +34,8 @@ export interface ViewSnapshot {
   readonly total: number
   readonly query: string
   readonly category: CategoryFilter
+  /** Only this team's items, or every visible team. */
+  readonly teamId: string | null
   readonly filterMs: number
 }
 
@@ -54,6 +56,7 @@ export class ItemStore {
     total: 0,
     query: '',
     category: 'all',
+    teamId: null,
     filterMs: 0,
   }
   private toastList: readonly Toast[] = []
@@ -140,14 +143,26 @@ export class ItemStore {
   }
 
   // --- filtering ---------------------------------------------------------------------------
+  /** Show one team's items (a team's list), or null for every team. Keeps the other filters. */
+  setTeam(teamId: string | null): void {
+    if (teamId === this.viewSnapshot.teamId) return
+    this.teamFilter = teamId
+    this.applyFilter(this.viewSnapshot.query, this.viewSnapshot.category)
+  }
+
+  private teamFilter: string | null = null
+
   applyFilter(query: string, category: CategoryFilter): void {
     const start = performance.now()
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
+    const teamId = this.teamFilter
     const ids =
-      terms.length === 0 && category === 'all'
+      terms.length === 0 && category === 'all' && teamId === null
         ? this.allIds
         : this.allIds.filter((id) => {
-            if (category !== 'all' && this.items.get(id)?.statusCategory !== category) return false
+            const item = this.items.get(id)
+            if (teamId !== null && item?.teamId !== teamId) return false
+            if (category !== 'all' && item?.statusCategory !== category) return false
             const text = this.haystack.get(id) ?? ''
             return terms.every((term) => text.includes(term))
           })
@@ -156,6 +171,7 @@ export class ItemStore {
       total: this.allIds.length,
       query,
       category,
+      teamId,
       filterMs: performance.now() - start,
     }
     this.emit()

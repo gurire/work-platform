@@ -170,3 +170,10 @@ ran the app before comments were added, delete `apps/api/.data` once.
   is stuck. You only see teams you can open.
 - The sample data includes about three months of made-up stage history, so the charts have
   something to show. Definitions are in `specs/dashboards.md` (draft).
+
+## Finding your way around
+
+- The **sidebar** has My work (`#/me`), Inbox, All items, All teams, and each team. The team
+  you are in opens to show its List (`#/team/DATA`), Board and Dashboard.
+- **Dev sign-in** ("act as") moved to the bottom of the sidebar. It is for local development
+  only and goes away when real sign-in arrives.

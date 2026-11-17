@@ -9,7 +9,7 @@ interface Props {
   onMarkAllRead: () => void
 }
 
-const WHAT: Record<InboxKind, string> = {
+export const WHAT: Record<InboxKind, string> = {
   mentioned: 'mentioned you on',
   assigned: 'made you the owner of',
   review_requested: 'asked you to review',

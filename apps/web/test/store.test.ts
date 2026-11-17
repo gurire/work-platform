@@ -95,6 +95,20 @@ describe('ItemStore', () => {
     expect(store.getView().total).toBe(1000)
   })
 
+  it('a team filter narrows the list and keeps the other filters', () => {
+    const team = store.getItem('item-1')!.teamId
+    store.setTeam(team)
+    const view = store.getView()
+    expect(view.teamId).toBe(team)
+    expect(view.ids.length).toBeGreaterThan(0)
+    expect(view.ids.every((id) => store.getItem(id)?.teamId === team)).toBe(true)
+    store.applyFilter('', 'done')
+    expect(store.getView().ids.every((id) => store.getItem(id)?.teamId === team)).toBe(true)
+    store.setTeam(null)
+    store.applyFilter('', 'all')
+    expect(store.getView().ids).toHaveLength(1000)
+  })
+
   it('put replaces a known item and keeps an unknown one (opened from a link) out of the list', () => {
     const changed = vi.fn()
     store.subscribeItem('item-1', changed)
