@@ -50,7 +50,7 @@ for every element and state. Where this spec and the canvas disagree, this spec 
   <tr><td valign="middle">--accent-text</td><td valign="middle">#A5ACF5</td><td valign="middle">#4F5BC4</td><td valign="middle">Accent used as text: links, active tab, active nav item</td></tr>
   <tr><td valign="middle">--accent-soft</td><td valign="middle">#5E6AD2 at 16%</td><td valign="middle">#EEF0FC</td><td valign="middle">Background of active nav item, mention, run tag</td></tr>
   <tr><td valign="middle">--focus-ring</td><td valign="middle">#5E6AD2</td><td valign="middle">#5E6AD2</td><td valign="middle">Keyboard focus outline, 2 px with a 2 px gap</td></tr>
-  <tr><td valign="middle">--danger</td><td valign="middle">#F87171</td><td valign="middle">#DC2626</td><td valign="middle">Overdue, urgent, errors, destructive actions</td></tr>
+  <tr><td valign="middle">--danger</td><td valign="middle">#F87171</td><td valign="middle">#B91C1C</td><td valign="middle">Overdue, urgent, errors, destructive actions</td></tr>
   <tr><td valign="middle">--btn-glow</td><td valign="middle">inner highlight + indigo edge + 22 px indigo glow</td><td valign="middle">small shadow + 14 px indigo glow</td><td valign="middle">Primary buttons only</td></tr>
 </table>
 
