@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { FIELD_TYPES, STAGE_TYPES, type FieldType, type StageType } from '@wm/shared'
 import { Banner, Button, Card, Field, STAGE_TYPE_LABEL, Switch, Tabs } from '../design/components'
-import { coreApi, type CoreTeam } from './core-api'
+import { coreApi, viewsApi, type CoreTeam, type FormQuestion } from './core-api'
 import { useAppData, useLoad } from './data'
 
 const FIELD_TYPE_LABEL: Record<FieldType, string> = {
@@ -20,7 +20,7 @@ export function SettingsPage({ teamId }: { teamId?: string | undefined }) {
   const { teams } = useAppData()
   const configurable = teams.filter((t) => t.canConfigure)
   const team = teams.find((t) => t.id === teamId) ?? configurable[0] ?? teams[0]
-  const [tab, setTab] = useState<'stages' | 'fields'>('stages')
+  const [tab, setTab] = useState<'stages' | 'fields' | 'forms'>('stages')
   if (!team)
     return (
       <div className="mx-page">
@@ -61,9 +61,16 @@ export function SettingsPage({ teamId }: { teamId?: string | undefined }) {
         options={[
           { id: 'stages', label: 'Stages and moves' },
           { id: 'fields', label: 'Fields' },
+          { id: 'forms', label: 'Request forms' },
         ]}
       />
-      {tab === 'stages' ? <StagesSettings team={team} /> : <FieldsSettings team={team} />}
+      {tab === 'stages' ? (
+        <StagesSettings team={team} />
+      ) : tab === 'fields' ? (
+        <FieldsSettings team={team} />
+      ) : (
+        <FormsSettings team={team} />
+      )}
     </div>
   )
 }
@@ -397,6 +404,178 @@ function FieldsSettings({ team }: { team: CoreTeam }) {
         <p className="md-field-error" role="alert">
           {error}
         </p>
+      ) : null}
+    </div>
+  )
+}
+
+type DraftQuestion = Omit<FormQuestion, 'key' | 'options'> & { options: string }
+
+function FormsSettings({ team }: { team: CoreTeam }) {
+  const forms = useLoad(() => viewsApi.forms(), 'forms')
+  const stages = [...team.stages]
+    .sort((a, b) => a.position - b.position)
+    .filter((s) => s.type !== 'done')
+  const [name, setName] = useState('')
+  const [intro, setIntro] = useState('')
+  const [startStage, setStartStage] = useState(stages[0]?.key ?? '')
+  const [questions, setQuestions] = useState<DraftQuestion[]>([
+    { label: 'Details', type: 'long_text', required: true, options: '' },
+  ])
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+  const ro = !team.canConfigure
+  const set = (i: number, patch: Partial<DraftQuestion>) =>
+    setQuestions((qs) => qs.map((q, j) => (j === i ? { ...q, ...patch } : q)))
+  return (
+    <div className="mx-settings-grid">
+      <Card className="mx-stack">
+        <h2 className="md-h2">{team.name}’s forms</h2>
+        {(forms.data ?? []).filter((f) => f.teamId === team.id).length === 0 ? (
+          <p className="md-meta">No forms yet.</p>
+        ) : null}
+        {(forms.data ?? [])
+          .filter((f) => f.teamId === team.id)
+          .map((f) => (
+            <div key={f.id} className="mx-file">
+              <span className="mx-grow md-strong">{f.name}</span>
+              <span className="md-meta">
+                {f.questions.length} questions · starts in{' '}
+                {team.stages.find((s) => s.key === f.startStage)?.name}
+              </span>
+            </div>
+          ))}
+      </Card>
+      {!ro ? (
+        <Card className="mx-stack">
+          <h2 className="md-h2">New form</h2>
+          <Field label="Name">
+            {({ id }) => (
+              <input
+                id={id}
+                className="md-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Data pull or report"
+              />
+            )}
+          </Field>
+          <Field label="Short introduction">
+            {({ id }) => (
+              <input
+                id={id}
+                className="md-input"
+                value={intro}
+                onChange={(e) => setIntro(e.target.value)}
+              />
+            )}
+          </Field>
+          <Field label="Accepted requests start in">
+            {({ id }) => (
+              <select
+                id={id}
+                className="md-select"
+                value={startStage}
+                onChange={(e) => setStartStage(e.target.value)}
+              >
+                {stages.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+          <span className="md-field-label">Questions (the title is always asked)</span>
+          {questions.map((q, i) => (
+            <div key={i} className="mx-question">
+              <input
+                className="md-input"
+                aria-label={`Question ${i + 1}`}
+                value={q.label}
+                onChange={(e) => set(i, { label: e.target.value })}
+              />
+              <select
+                className="md-select"
+                aria-label={`Answer type for question ${i + 1}`}
+                value={q.type}
+                onChange={(e) => set(i, { type: e.target.value as FormQuestion['type'] })}
+              >
+                <option value="short_text">Short text</option>
+                <option value="long_text">Long text</option>
+                <option value="date">Date</option>
+                <option value="pick_one">Pick one</option>
+              </select>
+              <label className="mx-check-pill">
+                <input
+                  type="checkbox"
+                  className="md-check"
+                  checked={q.required}
+                  onChange={(e) => set(i, { required: e.target.checked })}
+                />
+                Required
+              </label>
+              {q.type === 'pick_one' ? (
+                <input
+                  className="md-input"
+                  aria-label="Options, separated by commas"
+                  placeholder="Options, separated by commas"
+                  value={q.options}
+                  onChange={(e) => set(i, { options: e.target.value })}
+                />
+              ) : null}
+            </div>
+          ))}
+          <Button
+            size="s"
+            onClick={() =>
+              setQuestions((qs) => [
+                ...qs,
+                { label: '', type: 'short_text', required: false, options: '' },
+              ])
+            }
+          >
+            + Add question
+          </Button>
+          {error ? <span className="md-field-error">{error}</span> : null}
+          {saved ? <span className="mx-ok">✓ Form saved</span> : null}
+          <Button
+            kind="primary"
+            disabled={!name.trim() || questions.some((q) => !q.label.trim())}
+            onClick={async () => {
+              setError(null)
+              setSaved(false)
+              try {
+                await viewsApi.createForm(team.id, {
+                  name: name.trim(),
+                  ...(intro.trim() ? { intro: intro.trim() } : {}),
+                  startStage,
+                  questions: questions.map((q) => ({
+                    label: q.label.trim(),
+                    type: q.type,
+                    required: q.required,
+                    ...(q.type === 'pick_one'
+                      ? {
+                          options: q.options
+                            .split(',')
+                            .map((o) => o.trim())
+                            .filter(Boolean),
+                        }
+                      : {}),
+                  })),
+                })
+                setName('')
+                setIntro('')
+                setSaved(true)
+                forms.reload()
+              } catch (e) {
+                setError(e instanceof Error ? e.message : String(e))
+              }
+            }}
+          >
+            Save form
+          </Button>
+        </Card>
       ) : null}
     </div>
   )

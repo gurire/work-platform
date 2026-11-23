@@ -1,10 +1,11 @@
-import { CalendarDays, ClipboardList, LayoutGrid, Shapes } from 'lucide-react'
+import { Shapes } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Card, EmptyState } from '../design/components'
 import type { MRoute } from './routes'
 import { HomePage, ItemFullPage, ProjectPage, TeamBoardPage } from './boards'
 import { SettingsPage } from './settings'
 import { InboxPage } from './inbox'
+import { DashboardPage, PlanPage, RequestsPage } from './views'
 import { KitPage } from './KitPage'
 import { hrefFor } from './routes'
 
@@ -31,20 +32,6 @@ function Page({
   )
 }
 
-/** Placeholder until the phase that builds the page; says what the page will do. */
-function Coming({ icon, what, phase }: { icon: ReactNode; what: string; phase: string }) {
-  return (
-    <Card>
-      <EmptyState
-        icon={icon}
-        title={`Coming in ${phase}`}
-        text={what}
-        action={<a href={hrefFor({ page: 'kit' })}>See the component kit</a>}
-      />
-    </Card>
-  )
-}
-
 export function PageFor({ route }: { route: MRoute }) {
   switch (route.page) {
     case 'home':
@@ -58,35 +45,11 @@ export function PageFor({ route }: { route: MRoute }) {
     case 'item':
       return <ItemFullPage itemKey={route.key} />
     case 'plan':
-      return (
-        <Page title="Calendar and workload">
-          <Coming
-            icon={<CalendarDays size={22} />}
-            what="Items on their due dates with milestones, and each person's weekly load against capacity."
-            phase="phase 4 (Views and live updates)"
-          />
-        </Page>
-      )
+      return <PlanPage />
     case 'dashboard':
-      return (
-        <Page title="Dashboard">
-          <Coming
-            icon={<LayoutGrid size={22} />}
-            what="How far along each project is, who has what, and what is stuck."
-            phase="phase 4 (Views and live updates)"
-          />
-        </Page>
-      )
+      return <DashboardPage />
     case 'requests':
-      return (
-        <Page title="Requests">
-          <Coming
-            icon={<ClipboardList size={22} />}
-            what="The request form anyone can fill in, and each team's triage list."
-            phase="phase 4 (Views and live updates)"
-          />
-        </Page>
-      )
+      return <RequestsPage />
     case 'settings':
       return <SettingsPage teamId={route.teamId} />
     case 'kit':

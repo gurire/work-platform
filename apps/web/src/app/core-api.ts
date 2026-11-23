@@ -419,3 +419,127 @@ export const workApi = {
   search: (q: string) =>
     request<{ results: SearchResult[] }>(`/core/search?q=${enc(q)}`).then((b) => b.results),
 }
+
+/* Phase 4: views, intake and live updates */
+
+export interface CalendarData {
+  items: {
+    id: string
+    key: string
+    title: string
+    teamId: string
+    dueOn: string
+    stageType: import('@wm/shared').StageType
+    assigneeId: string | null
+    projectId: string | null
+  }[]
+  milestones: { id: string; name: string; dueOn: string; projectId: string; projectName: string }[]
+}
+
+export interface WorkloadData {
+  weekStarts: string[]
+  people: {
+    id: string
+    name: string
+    teams: string[]
+    unit: string
+    capacity: number
+    weeks: { load: number; items: number }[]
+  }[]
+}
+
+export interface DashboardData {
+  tiles: { open: number; inReview: number; doneThisWeek: number; stuck: number }
+  projects: { id: string; name: string; colour: number; progress: Progress }[]
+  people: { id: string; name: string; waiting: number; doing: number; review: number }[]
+  stuck: {
+    id: string
+    key: string
+    title: string
+    teamId: string
+    stageKey: string
+    assigneeId: string | null
+    days: number
+  }[]
+}
+
+export interface FormQuestion {
+  key: string
+  label: string
+  type: 'short_text' | 'long_text' | 'date' | 'pick_one'
+  required: boolean
+  options?: string[]
+}
+
+export interface IntakeForm {
+  id: string
+  teamId: string
+  teamName: string
+  name: string
+  intro: string | null
+  questions: FormQuestion[]
+  startStage: string
+}
+
+export interface RequestView {
+  id: string
+  formId: string
+  formName: string
+  teamId: string
+  requesterId: string
+  title: string
+  answers: { label: string; value: string }[]
+  status: 'new' | 'needs_info' | 'accepted' | 'declined'
+  note: string | null
+  itemKey: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+const q = (params: Record<string, string | number | undefined>) =>
+  Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== '')
+    .map(([k, v]) => `${k}=${enc(String(v))}`)
+    .join('&')
+
+export const viewsApi = {
+  calendar: (from: string, to: string, teamId?: string) =>
+    request<CalendarData>(`/core/calendar?${q({ from, to, teamId })}`),
+  workload: (teamId?: string, weeks = 4) =>
+    request<WorkloadData>(`/core/workload?${q({ teamId, weeks })}`),
+  dashboard: (teamId?: string) => request<DashboardData>(`/core/dashboard?${q({ teamId })}`),
+  forms: () => request<{ forms: IntakeForm[] }>('/core/forms').then((b) => b.forms),
+  createForm: (
+    teamId: string,
+    body: {
+      name: string
+      intro?: string
+      questions: Omit<FormQuestion, 'key'>[]
+      startStage: string
+    },
+  ) => request<{ id: string }>(`/core/teams/${enc(teamId)}/forms`, json('POST', body)),
+  submit: (formId: string, title: string, answers: Record<string, string>) =>
+    request<{ id: string }>(
+      `/core/forms/${enc(formId)}/requests`,
+      json('POST', { title, answers }),
+    ),
+  teamRequests: (teamId: string) =>
+    request<{ requests: RequestView[] }>(`/core/teams/${enc(teamId)}/requests`).then(
+      (b) => b.requests,
+    ),
+  myRequests: () =>
+    request<{ requests: RequestView[] }>('/core/me/requests').then((b) => b.requests),
+  accept: (id: string, projectId: string | null) =>
+    request<{ itemKey: string }>(`/core/requests/${enc(id)}/accept`, json('POST', { projectId })),
+  ask: (id: string, note: string) =>
+    request<unknown>(`/core/requests/${enc(id)}/ask`, json('POST', { note })),
+  decline: (id: string, note: string) =>
+    request<unknown>(`/core/requests/${enc(id)}/decline`, json('POST', { note })),
+}
+
+/** The address of the live channel, with this person's sign-in. */
+export async function liveUrl(): Promise<string> {
+  const base = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/live`
+  if (auth) return `${base}?token=${enc((await idToken(auth)) ?? '')}`
+  return `${base}?user=${enc(devUser())}`
+}

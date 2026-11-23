@@ -3,13 +3,19 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import '../design/tokens.css'
 import '../design/components.css'
 import './app.css'
-import { IconButton } from '../design/components'
+import { Counter, IconButton, Toast } from '../design/components'
 import { useTheme, type ThemeChoice } from '../design/theme'
 import { PageFor } from './pages'
 import { hrefFor, parseMRoute, type MRoute } from './routes'
 import { DataProvider, useAppData } from './data'
 import { workApi, type CoreProject, type CoreTeam, type SearchResult } from './core-api'
 import { Sidebar } from './Sidebar'
+import { INBOX_WHAT } from './inbox'
+
+const inboxWhat = (kind: string) => {
+  const what = INBOX_WHAT[kind] ?? kind
+  return what[0]?.toUpperCase() + what.slice(1)
+}
 
 const NEXT_CHOICE: Record<ThemeChoice, ThemeChoice> = {
   dark: 'light',
@@ -168,7 +174,10 @@ export function AppShell() {
 }
 
 function Shell() {
-  const { projects, teams, error } = useAppData()
+  const { projects, teams, error, unread, popups, dismissPopup, live } = useAppData()
+  const [notifyState, setNotifyState] = useState(() =>
+    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
+  )
   const [route, setRoute] = useState<MRoute>(() => parseMRoute(window.location.hash))
   const [menuOpen, setMenuOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -226,12 +235,36 @@ function Shell() {
             >
               <ThemeIcon size={18} />
             </IconButton>
-            <IconButton
-              label="Notifications"
-              onClick={() => (window.location.hash = hrefFor({ page: 'inbox' }))}
+            {notifyState === 'default' ? (
+              <button
+                type="button"
+                className="md-btn md-btn-ghost md-btn-s"
+                onClick={() => void Notification.requestPermission().then((p) => setNotifyState(p))}
+              >
+                Turn on desktop pop-ups
+              </button>
+            ) : null}
+            <span
+              className="mx-live"
+              title={
+                live ? 'Live: changes show up straight away' : 'Reconnecting… the page still works'
+              }
             >
-              <Bell size={18} />
-            </IconButton>
+              <span
+                className={live ? 'mx-live-dot mx-live-on' : 'mx-live-dot'}
+                aria-hidden="true"
+              />
+              <span className="md-meta">{live ? 'Live' : 'Offline'}</span>
+            </span>
+            <span className="mx-bell">
+              <IconButton
+                label={`Inbox, ${unread} unread`}
+                onClick={() => (window.location.hash = hrefFor({ page: 'inbox' }))}
+              >
+                <Bell size={18} />
+              </IconButton>
+              {unread > 0 ? <Counter value={unread} /> : null}
+            </span>
           </span>
         </header>
         <main id="mx-main" className="mx-main" tabIndex={-1}>
@@ -246,6 +279,17 @@ function Shell() {
         </main>
       </div>
       <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <div className="mx-toasts" aria-live="polite">
+        {popups.map((p) => (
+          <Toast
+            key={p.id}
+            kind="info"
+            title={`${p.itemKey} ${p.itemTitle}`}
+            text={inboxWhat(p.kind)}
+            onClose={() => dismissPopup(p.id)}
+          />
+        ))}
+      </div>
     </div>
   )
 }
