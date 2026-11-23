@@ -41,7 +41,13 @@ export async function userForClaims(db: Db, claims: IdClaims): Promise<string | 
 /** Rejects bad tokens (401) and people who were not invited (403) before any route runs. */
 export function registerAuth(app: FastifyInstance, db: Db, verify: IdTokenVerifier): void {
   app.addHook('onRequest', async (request: FastifyRequest, reply) => {
-    const header = request.headers.authorization
+    // Browsers cannot set headers on a WebSocket, so the live channel takes the token in the address.
+    const liveToken =
+      request.url.startsWith('/live') &&
+      typeof (request.query as Record<string, unknown> | undefined)?.['token'] === 'string'
+        ? `Bearer ${String((request.query as Record<string, unknown>)['token'])}`
+        : undefined
+    const header = request.headers.authorization ?? liveToken
     if (!header) return
     const match = /^Bearer (.+)$/.exec(header)
     if (!match?.[1]) return reply.code(401).send({ error: 'unauthenticated' })

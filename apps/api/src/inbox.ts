@@ -8,7 +8,8 @@ import type { Queryable } from './db/db.js'
 export interface InboxEntry {
   readonly userId: string | null
   readonly kind: InboxKind
-  readonly itemId: string
+  readonly itemId: string | null
+  readonly requestId?: string | null
   readonly actorId: string | null
   readonly commentId?: string | null
 }
@@ -22,8 +23,15 @@ export async function notify(db: Queryable, entries: readonly InboxEntry[]): Pro
     if (seen.has(key)) continue
     seen.add(key)
     await db.query(
-      'INSERT INTO inbox (user_id, kind, item_id, actor_id, comment_id) VALUES ($1, $2, $3, $4, $5)',
-      [entry.userId, entry.kind, entry.itemId, entry.actorId, entry.commentId ?? null],
+      'INSERT INTO inbox (user_id, kind, item_id, actor_id, comment_id, request_id) VALUES ($1, $2, $3, $4, $5, $6)',
+      [
+        entry.userId,
+        entry.kind,
+        entry.itemId,
+        entry.actorId,
+        entry.commentId ?? null,
+        entry.requestId ?? null,
+      ],
     )
   }
 }

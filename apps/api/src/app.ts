@@ -12,6 +12,8 @@ import { registerDashboardRoutes } from './routes/dashboards.js'
 import { registerPeopleRoutes } from './routes/people.js'
 import { registerCoreRoutes } from './routes/core.js'
 import { registerWorkRoutes } from './routes/work.js'
+import { registerViewRoutes } from './routes/views.js'
+import { registerLive } from './live.js'
 import { memoryFileStore, type FileStore } from './files.js'
 
 export interface AppOptions {
@@ -48,6 +50,8 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
       devAuth: options.devAuth === true,
       files: options.files ?? memoryFileStore(),
     })
+    registerViewRoutes(app, { db: options.db, devAuth: options.devAuth === true })
+    registerLive(app, { db: options.db, devAuth: options.devAuth === true })
     registerReviewRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerRecordRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerBoardRoutes(app, { db: options.db, devAuth: options.devAuth === true })

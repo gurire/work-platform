@@ -554,6 +554,40 @@ const MIGRATIONS: readonly { id: string; sql: string }[] = [
         'run_started', 'run_blocked', 'request_new', 'request_update'));
     `,
   },
+  {
+    // Views and live updates (ADR 0008 phase 4): intake forms and requests. Expand only.
+    id: '0013_intake',
+    sql: `
+      CREATE TABLE intake_forms (
+        id           text PRIMARY KEY,
+        team_id      text NOT NULL REFERENCES teams (id),
+        name         text NOT NULL CHECK (length(name) BETWEEN 1 AND 80),
+        intro        text CHECK (length(intro) <= 1000),
+        questions    jsonb NOT NULL DEFAULT '[]',
+        start_stage  text NOT NULL,
+        archived_at  timestamptz,
+        created_by   text NOT NULL REFERENCES users (id),
+        created_at   timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE requests (
+        id            text PRIMARY KEY,
+        form_id       text NOT NULL REFERENCES intake_forms (id),
+        requester_id  text NOT NULL REFERENCES users (id),
+        title         text NOT NULL CHECK (length(title) BETWEEN 1 AND 200),
+        answers       jsonb NOT NULL DEFAULT '{}',
+        status        text NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'needs_info', 'accepted', 'declined')),
+        note          text CHECK (length(note) <= 2000),
+        item_id       text REFERENCES work_items (id),
+        decided_by    text REFERENCES users (id),
+        created_at    timestamptz NOT NULL DEFAULT now(),
+        updated_at    timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX requests_form ON requests (form_id, created_at DESC);
+      CREATE INDEX requests_requester ON requests (requester_id, created_at DESC);
+      ALTER TABLE inbox ALTER COLUMN item_id DROP NOT NULL;
+      ALTER TABLE inbox ADD COLUMN request_id text REFERENCES requests (id);
+    `,
+  },
 ]
 
 export async function migrate(db: Db): Promise<string[]> {

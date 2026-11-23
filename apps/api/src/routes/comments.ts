@@ -271,11 +271,12 @@ export function registerCommentRoutes(
       const rows = await db.query<{
         id: string
         kind: InboxKind
-        item_id: string
+        item_id: string | null
         item_key: string
         item_title: string
-        team_id: string
+        team_id: string | null
         is_private: boolean
+        request_id: string | null
         actor_id: string | null
         comment_id: string | null
         comment_body: string | null
@@ -283,19 +284,24 @@ export function registerCommentRoutes(
         created_at: Date | string
         read_at: Date | string | null
       }>(
-        `SELECT n.id, n.kind, n.item_id, w.key AS item_key, w.title AS item_title, w.team_id,
-           t.is_private, n.actor_id, n.comment_id, c.body AS comment_body,
+        `SELECT n.id, n.kind, n.item_id, COALESCE(w.key, 'Request') AS item_key,
+           COALESCE(w.title, q.title) AS item_title, w.team_id, COALESCE(t.is_private, false) AS is_private,
+           n.actor_id, n.comment_id, c.body AS comment_body, n.request_id,
            (c.deleted_at IS NOT NULL) AS comment_deleted, n.created_at, n.read_at
          FROM inbox n
-         JOIN work_items w ON w.id = n.item_id
-         JOIN teams t ON t.id = w.team_id
+         LEFT JOIN work_items w ON w.id = n.item_id
+         LEFT JOIN teams t ON t.id = w.team_id
+         LEFT JOIN requests q ON q.id = n.request_id
          LEFT JOIN comments c ON c.id = n.comment_id
-         WHERE n.user_id = $1 AND w.deleted_at IS NULL ${request.query.unread ? 'AND n.read_at IS NULL' : ''}
+         WHERE n.user_id = $1 AND (w.id IS NOT NULL OR q.id IS NOT NULL)
+           AND (w.id IS NULL OR w.deleted_at IS NULL) ${request.query.unread ? 'AND n.read_at IS NULL' : ''}
          ORDER BY n.id DESC LIMIT 300`,
         [principal.id],
       )
+      // Request notices have no item; they go only to the requester and the receiving team.
       const visible = rows.filter(
         (r) =>
+          r.team_id === null ||
           decide(principal, 'item.view', { team: { id: r.team_id, isPrivate: r.is_private } })
             .allowed,
       )
@@ -306,6 +312,7 @@ export function registerCommentRoutes(
           kind: r.kind,
           itemId: r.item_id,
           itemKey: r.item_key,
+          requestId: r.request_id,
           itemTitle: r.item_title,
           actorId: r.actor_id,
           excerpt: r.comment_body && !r.comment_deleted ? r.comment_body.slice(0, 200) : null,
