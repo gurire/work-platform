@@ -1,0 +1,144 @@
+/*
+ * Midnight colour tokens (specs/design-system.md, section 2 and 3).
+ * This is the only file in the new UI that may contain colour values.
+ * The tokens apply inside any element marked data-ui="midnight"; data-theme picks the set.
+ */
+
+[data-ui='midnight'] {
+  /* Status and priority base colours: the same in both modes. */
+  --status-waiting: #64748b;
+  --status-doing: #0ea5e9;
+  --status-review: #f59e0b;
+  --status-done: #10b981;
+  --status-urgent: #ef4444;
+  --priority-high: #f97316;
+  --accent: #5e6ad2;
+  --accent-top: #6e79e0;
+  --focus-ring: #5e6ad2;
+  --on-accent: #ffffff;
+
+  --font: 'Inter Variable', 'Inter', system-ui, sans-serif;
+  --radius-card: 12px;
+  --radius-control: 8px;
+  --radius-round: 999px;
+  --motion-fast: 150ms;
+  --motion-panel: 200ms;
+}
+
+[data-ui='midnight'][data-theme='dark'] {
+  color-scheme: dark;
+  --bg-base: #09090b;
+  --bg-glow-1: rgb(94 106 210 / 20%);
+  --bg-glow-2: rgb(124 58 237 / 10%);
+  --surface: #111113;
+  --surface-2: #18181b;
+  --col: #141417;
+  --side-bg: rgb(12 12 14 / 88%);
+  --border: #27272a;
+  --divider: #1f1f23;
+  --border-strong: #3f3f46;
+  --text: #fafafa;
+  --text-2: #d4d4d8;
+  --muted: #a1a1aa;
+  --muted-2: #8b8b93;
+  --accent-text: #a5acf5;
+  --accent-soft: rgb(94 106 210 / 16%);
+  --danger: #f87171;
+  --danger-soft: rgb(239 68 68 / 12%);
+  --success: #34d399;
+  --warn-bg: rgb(245 158 11 / 12%);
+  --warn-text: #fcd34d;
+  --warn-border: rgb(245 158 11 / 35%);
+  --avatar-bg: #27272a;
+  --avatar-text: #e4e4e7;
+  --tooltip-bg: #fafafa;
+  --tooltip-text: #18181b;
+  --overlay: rgb(0 0 0 / 60%);
+  --btn-glow:
+    inset 0 1px 0 rgb(255 255 255 / 18%), 0 0 0 1px rgb(94 106 210 / 60%),
+    0 6px 22px rgb(94 106 210 / 40%);
+  --card-shadow: none;
+  --float-shadow: 0 16px 40px rgb(0 0 0 / 50%);
+  --selected-glow: 0 0 24px rgb(94 106 210 / 35%);
+  --tag-glow-doing: 0 0 14px rgb(14 165 233 / 25%);
+  --tag-glow-review: 0 0 14px rgb(245 158 11 / 22%);
+  --tag-glow-done: 0 0 14px rgb(16 185 129 / 22%);
+  --tag-glow-urgent: 0 0 14px rgb(239 68 68 / 25%);
+
+  --waiting-bg: rgb(100 116 139 / 18%);
+  --waiting-fg: #cbd5e1;
+  --waiting-edge: rgb(148 163 184 / 30%);
+  --doing-bg: rgb(14 165 233 / 14%);
+  --doing-fg: #7dd3fc;
+  --doing-edge: rgb(14 165 233 / 45%);
+  --review-bg: rgb(245 158 11 / 14%);
+  --review-fg: #fcd34d;
+  --review-edge: rgb(245 158 11 / 45%);
+  --done-bg: rgb(16 185 129 / 14%);
+  --done-fg: #6ee7b7;
+  --done-edge: rgb(16 185 129 / 45%);
+  --urgent-bg: rgb(239 68 68 / 15%);
+  --urgent-fg: #fca5a5;
+  --urgent-edge: rgb(239 68 68 / 45%);
+  --high-bg: rgb(249 115 22 / 15%);
+  --high-fg: #fdba74;
+  --high-edge: rgb(249 115 22 / 40%);
+}
+
+[data-ui='midnight'][data-theme='light'] {
+  color-scheme: light;
+  --bg-base: #fafafa;
+  --bg-glow-1: transparent;
+  --bg-glow-2: transparent;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --col: #f4f4f5;
+  --side-bg: #f4f4f5;
+  --border: #e4e4e7;
+  --divider: #ededef;
+  --border-strong: #d4d4d8;
+  --text: #09090b;
+  --text-2: #3f3f46;
+  --muted: #52525b;
+  --muted-2: #63636b;
+  --accent-text: #4f5bc4;
+  --accent-soft: #eef0fc;
+  --danger: #b91c1c;
+  --danger-soft: #fef2f2;
+  --success: #047857;
+  --warn-bg: #fffbeb;
+  --warn-text: #92400e;
+  --warn-border: #fde68a;
+  --avatar-bg: #e0e7ff;
+  --avatar-text: #3730a3;
+  --tooltip-bg: #18181b;
+  --tooltip-text: #fafafa;
+  --overlay: rgb(0 0 0 / 35%);
+  --btn-glow: 0 1px 2px rgb(0 0 0 / 10%), 0 4px 14px rgb(94 106 210 / 30%);
+  --card-shadow: 0 1px 2px rgb(9 9 11 / 4%);
+  --float-shadow: 0 12px 32px rgb(9 9 11 / 10%);
+  --selected-glow: 0 0 0 0 transparent;
+  --tag-glow-doing: none;
+  --tag-glow-review: none;
+  --tag-glow-done: none;
+  --tag-glow-urgent: none;
+
+  --waiting-bg: #f1f5f9;
+  --waiting-fg: #475569;
+  --waiting-edge: #e2e8f0;
+  --doing-bg: #f0f9ff;
+  --doing-fg: #0369a1;
+  --doing-edge: #bae6fd;
+  --review-bg: #fffbeb;
+  --review-fg: #b45309;
+  --review-edge: #fde68a;
+  --done-bg: #ecfdf5;
+  --done-fg: #047857;
+  --done-edge: #a7f3d0;
+  --urgent-bg: #fef2f2;
+  --urgent-fg: #b91c1c;
+  --urgent-edge: #fecaca;
+  --high-bg: #fff7ed;
+  --high-fg: #c2410c;
+  --high-edge: #fed7aa;
+}
