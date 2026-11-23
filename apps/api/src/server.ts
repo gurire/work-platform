@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { buildApp } from './app.js'
-import { createPgliteDb } from './db/db.js'
+import { createPgliteDb, type Db } from './db/db.js'
+import { createPgDb } from './db/pg.js'
 import { migrate } from './db/migrations.js'
 import { seedDevData } from './db/seed.js'
 import { cognitoVerifier } from './cognito.js'
@@ -23,13 +24,24 @@ async function main(): Promise<void> {
       )
     }
     // The local embedded database is for development only.
-    throw new Error('The production database is not built yet. Refusing to start.')
+    if (!process.env['DATABASE_URL']) {
+      throw new Error('Production needs DATABASE_URL (the RDS database). Refusing to start.')
+    }
   }
-  const dataDir = process.env['WM_DATA_DIR'] ?? '.data/pglite'
-  mkdirSync(dataDir, { recursive: true })
-  const db = await createPgliteDb(dataDir)
+  // DATABASE_URL points at a real PostgreSQL (RDS on AWS). Without it, the embedded PGlite
+  // database keeps local data in WM_DATA_DIR.
+  const databaseUrl = process.env['DATABASE_URL']
+  let db: Db
+  if (databaseUrl) {
+    db = createPgDb(databaseUrl, { ssl: process.env['DATABASE_SSL'] !== 'off' })
+  } else {
+    const dataDir = process.env['WM_DATA_DIR'] ?? '.data/pglite'
+    mkdirSync(dataDir, { recursive: true })
+    db = await createPgliteDb(dataDir)
+  }
   const applied = await migrate(db)
-  await seedDevData(db)
+  // Sample data is for development only; a real database never gets it.
+  if (!isProduction) await seedDevData(db)
 
   // Signed code events (specs/code-status.md). Locally a fixed development secret is used so
   // `pnpm code-event` works; a real deployment must set its own and never this one.
