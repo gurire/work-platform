@@ -231,6 +231,7 @@ export async function seedDevData(db: Db, itemCount = 2000, pipelineCount = 300)
   await db.exec(`UPDATE stages SET kind = 'review'
     WHERE team_id = 'DATA' AND key IN ('validation', 'client_review')`)
   await seedFlowHistory(db)
+  await seedCoreSample(db)
   // An item was created when it first entered a stage, so "Created" matches its history.
   await db.exec(`UPDATE work_items w SET created_at = h.first_entered
     FROM (SELECT item_id, min(entered_at) AS first_entered FROM stage_history GROUP BY item_id) h
@@ -274,4 +275,49 @@ export async function insertItem(db: Queryable, item: NewItem): Promise<void> {
     item.statusId,
     item.assigneeId,
   ])
+}
+
+/**
+ * Sample projects and milestones for the restart's core model (specs/data-model.md).
+ * Generated names only. Runs inside seedDevData's transaction.
+ */
+export async function seedCoreSample(db: Queryable): Promise<void> {
+  // Stages added by the sample data above get their type from category, kind and name.
+  await db.query(`UPDATE stages SET stage_type = CASE
+      WHEN category = 'todo' THEN 'waiting'
+      WHEN category IN ('done', 'cancelled') THEN 'done'
+      WHEN kind = 'review' OR review_send_back_to IS NOT NULL OR name ~* '(review|approval|qa)' THEN 'review'
+      WHEN kind = 'waiting' THEN 'waiting'
+      ELSE 'doing' END,
+    done_outcome = CASE category WHEN 'done' THEN 'completed' WHEN 'cancelled' THEN 'cancelled' END`)
+  await db.query(`UPDATE teams SET estimate_unit = 'points' WHERE id IN ('WEB', 'API')`)
+  const projects: [string, string, number, string, string[]][] = [
+    ['census-refresh', 'Census data refresh', 1, 'user-1', ['DATA', 'ENG']],
+    ['field-app', 'Field app v2', 2, 'user-2', ['WEB', 'API']],
+    ['summit', 'Annual summit', 3, 'user-3', ['OPS']],
+  ]
+  for (const [id, name, colour, owner, teamIds] of projects) {
+    await db.query(
+      'INSERT INTO projects (id, name, colour, owner_id, starts_on, ends_on) VALUES ($1, $2, $3, $4, current_date - 30, current_date + 60)',
+      [id, name, colour, owner],
+    )
+    await db.query(
+      `INSERT INTO milestones (id, project_id, name, due_on, position) VALUES
+         ($1 || '-m1', $1, 'First milestone', current_date + 10, 1),
+         ($1 || '-m2', $1, 'Second milestone', current_date + 45, 2)`,
+      [id],
+    )
+    // The 40 oldest top-level items of each team join the project, spread over its milestones.
+    await db.query(
+      `UPDATE work_items w SET project_id = $1,
+         milestone_id = CASE WHEN p.n % 2 = 0 THEN $1 || '-m1' ELSE $1 || '-m2' END,
+         due_on = current_date + ((p.n % 50) - 10)::int,
+         estimate = (1 + p.n % 8)::int,
+         labels = CASE WHEN p.n % 3 = 0 THEN ARRAY['monthly'] WHEN p.n % 5 = 0 THEN ARRAY['portal'] ELSE '{}' END
+       FROM (SELECT id, row_number() OVER (PARTITION BY team_id ORDER BY seq) AS n
+             FROM work_items WHERE team_id = ANY($2) AND parent_id IS NULL AND deleted_at IS NULL) p
+       WHERE w.id = p.id AND p.n <= 40`,
+      [id, teamIds],
+    )
+  }
 }

@@ -10,6 +10,7 @@ import { registerCodeRoutes } from './routes/code.js'
 import { registerCommentRoutes } from './routes/comments.js'
 import { registerDashboardRoutes } from './routes/dashboards.js'
 import { registerPeopleRoutes } from './routes/people.js'
+import { registerCoreRoutes } from './routes/core.js'
 
 export interface AppOptions {
   /** Without a database only the health and meta routes exist. */
@@ -37,6 +38,7 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
   if (options.db) {
     if (options.verifyIdToken) registerAuth(app, options.db, options.verifyIdToken)
     registerItemRoutes(app, { db: options.db, devAuth: options.devAuth === true })
+    registerCoreRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerReviewRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerRecordRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerBoardRoutes(app, { db: options.db, devAuth: options.devAuth === true })

@@ -343,6 +343,122 @@ const MIGRATIONS: readonly { id: string; sql: string }[] = [
       CREATE UNIQUE INDEX users_auth_subject ON users (auth_subject) WHERE auth_subject IS NOT NULL;
     `,
   },
+  {
+    // Core model of the restart (docs/adr/0008-restart.md, specs/data-model.md). Expand only:
+    // new tables and new columns; the old columns keep working until the old screens are gone.
+    id: '0011_core_model',
+    sql: `
+      ALTER TABLE stages ADD COLUMN stage_type text
+        CHECK (stage_type IN ('waiting', 'doing', 'review', 'done'));
+      ALTER TABLE stages ADD COLUMN done_outcome text
+        CHECK (done_outcome IN ('completed', 'cancelled'));
+      UPDATE stages SET stage_type = CASE
+          WHEN category = 'todo' THEN 'waiting'
+          WHEN category IN ('done', 'cancelled') THEN 'done'
+          WHEN kind = 'review' OR review_send_back_to IS NOT NULL OR name ~* '(review|approval|qa)' THEN 'review'
+          WHEN kind = 'waiting' THEN 'waiting'
+          ELSE 'doing' END,
+        done_outcome = CASE category WHEN 'done' THEN 'completed' WHEN 'cancelled' THEN 'cancelled' END;
+
+      CREATE OR REPLACE FUNCTION add_default_stages() RETURNS trigger AS $fn$
+      BEGIN
+        INSERT INTO stages (team_id, key, name, category, position, stage_type, done_outcome) VALUES
+          (NEW.id, 'backlog', 'Backlog', 'todo', 1, 'waiting', NULL),
+          (NEW.id, 'todo', 'To do', 'todo', 2, 'waiting', NULL),
+          (NEW.id, 'in_progress', 'In progress', 'in_progress', 3, 'doing', NULL),
+          (NEW.id, 'in_review', 'In review', 'in_progress', 4, 'review', NULL),
+          (NEW.id, 'done', 'Done', 'done', 5, 'done', 'completed'),
+          (NEW.id, 'cancelled', 'Cancelled', 'cancelled', 6, 'done', 'cancelled');
+        RETURN NEW;
+      END;
+      $fn$ LANGUAGE plpgsql;
+
+      -- Older code paths still add stages without a type; work it out for them.
+      CREATE FUNCTION fill_stage_type() RETURNS trigger AS $fn$
+      BEGIN
+        IF NEW.stage_type IS NULL THEN
+          NEW.stage_type := CASE
+            WHEN NEW.category = 'todo' THEN 'waiting'
+            WHEN NEW.category IN ('done', 'cancelled') THEN 'done'
+            WHEN NEW.kind = 'review' OR NEW.review_send_back_to IS NOT NULL OR NEW.name ~* '(review|approval|qa)' THEN 'review'
+            ELSE 'doing' END;
+        END IF;
+        IF NEW.stage_type = 'done' AND NEW.done_outcome IS NULL THEN
+          NEW.done_outcome := CASE WHEN NEW.category = 'cancelled' THEN 'cancelled' ELSE 'completed' END;
+        END IF;
+        RETURN NEW;
+      END;
+      $fn$ LANGUAGE plpgsql;
+      CREATE TRIGGER stages_fill_type BEFORE INSERT ON stages
+        FOR EACH ROW EXECUTE FUNCTION fill_stage_type();
+
+      ALTER TABLE teams ADD COLUMN estimate_unit text NOT NULL DEFAULT 'hours'
+        CHECK (estimate_unit IN ('hours', 'points'));
+      ALTER TABLE teams ADD COLUMN weekly_capacity integer NOT NULL DEFAULT 30
+        CHECK (weekly_capacity BETWEEN 1 AND 168);
+      -- Item numbers only go up and are never reused (rule 6).
+      ALTER TABLE teams ADD COLUMN item_seq integer NOT NULL DEFAULT 0;
+      UPDATE teams t SET item_seq = COALESCE((
+        SELECT max(substring(w.key FROM '[0-9]+$')::int) FROM work_items w WHERE w.team_id = t.id
+      ), 0);
+
+      CREATE TABLE projects (
+        id           text PRIMARY KEY,
+        name         text NOT NULL CHECK (length(name) BETWEEN 1 AND 120),
+        colour       integer NOT NULL CHECK (colour BETWEEN 1 AND 8),
+        owner_id     text NOT NULL REFERENCES users (id),
+        starts_on    date,
+        ends_on      date,
+        archived_at  timestamptz,
+        created_at   timestamptz NOT NULL DEFAULT now(),
+        updated_at   timestamptz NOT NULL DEFAULT now(),
+        deleted_at   timestamptz
+      );
+      CREATE TABLE milestones (
+        id          text PRIMARY KEY,
+        project_id  text NOT NULL REFERENCES projects (id),
+        name        text NOT NULL CHECK (length(name) BETWEEN 1 AND 120),
+        due_on      date,
+        position    integer NOT NULL DEFAULT 0,
+        done_on     date,
+        created_at  timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX milestones_project ON milestones (project_id, position);
+
+      ALTER TABLE work_items ADD COLUMN project_id text REFERENCES projects (id);
+      ALTER TABLE work_items ADD COLUMN milestone_id text REFERENCES milestones (id);
+      ALTER TABLE work_items ADD COLUMN due_on date;
+      ALTER TABLE work_items ADD COLUMN estimate integer CHECK (estimate BETWEEN 0 AND 10000);
+      ALTER TABLE work_items ADD COLUMN labels text[] NOT NULL DEFAULT '{}';
+      CREATE INDEX work_items_project ON work_items (project_id) WHERE project_id IS NOT NULL;
+      CREATE INDEX work_items_parent ON work_items (parent_id) WHERE parent_id IS NOT NULL;
+
+      -- Field library (team_id null) and team fields (rules 15–18). Values live in work_items.fields.
+      CREATE TABLE field_defs (
+        id          text PRIMARY KEY,
+        team_id     text REFERENCES teams (id),
+        key         text NOT NULL CHECK (key ~ '^[a-z][a-z0-9_]{0,39}$'),
+        label       text NOT NULL CHECK (length(label) BETWEEN 1 AND 60),
+        type        text NOT NULL CHECK (type IN ('short_text', 'long_text', 'number', 'date',
+                      'pick_one', 'pick_many', 'person', 'link')),
+        options     jsonb NOT NULL DEFAULT '[]',
+        position    integer NOT NULL DEFAULT 0,
+        created_at  timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE UNIQUE INDEX field_defs_library_key ON field_defs (key) WHERE team_id IS NULL;
+      CREATE UNIQUE INDEX field_defs_team_key ON field_defs (team_id, key) WHERE team_id IS NOT NULL;
+      CREATE TABLE team_field_settings (
+        team_id   text NOT NULL REFERENCES teams (id),
+        field_id  text NOT NULL REFERENCES field_defs (id),
+        enabled   boolean NOT NULL,
+        PRIMARY KEY (team_id, field_id)
+      );
+      INSERT INTO field_defs (id, team_id, key, label, type, options, position) VALUES
+        ('lib-reviewers', NULL, 'reviewers', 'Reviewers', 'person', '[]', 1),
+        ('lib-source', NULL, 'source', 'Source', 'short_text', '[]', 2),
+        ('lib-frequency', NULL, 'frequency', 'Frequency', 'pick_one', '["Monthly","Quarterly","Yearly"]', 3);
+    `,
+  },
 ]
 
 export async function migrate(db: Db): Promise<string[]> {

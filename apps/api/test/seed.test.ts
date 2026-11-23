@@ -17,6 +17,7 @@ describe('migrations and dev seed', () => {
       '0008_comments',
       '0009_stage_kind',
       '0010_sign_in',
+      '0011_core_model',
     ])
     expect(await migrate(db)).toEqual([])
     await seedDevData(db, 40, 10)
