@@ -1,8 +1,9 @@
-import { CalendarDays, ClipboardList, Inbox, LayoutGrid, Settings, Shapes } from 'lucide-react'
+import { CalendarDays, ClipboardList, Inbox, LayoutGrid, Shapes } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Card, EmptyState } from '../design/components'
 import type { MRoute } from './routes'
-import { SAMPLE_PROJECTS, SAMPLE_TEAMS } from './nav-data'
+import { HomePage, ItemFullPage, ProjectPage, TeamBoardPage } from './boards'
+import { SettingsPage } from './settings'
 import { KitPage } from './KitPage'
 import { hrefFor } from './routes'
 
@@ -43,26 +44,10 @@ function Coming({ icon, what, phase }: { icon: ReactNode; what: string; phase: s
   )
 }
 
-function today(): string {
-  return new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
-}
-
 export function PageFor({ route }: { route: MRoute }) {
   switch (route.page) {
     case 'home':
-      return (
-        <Page
-          eyebrow={today()}
-          title="My work"
-          intro="Your items, the reviews waiting on you and your mentions, in one place."
-        >
-          <Coming
-            icon={<ClipboardList size={22} />}
-            what="Assigned to me, waiting on my review, mentions; stuck items and milestones on the right."
-            phase="phase 2 (Core model)"
-          />
-        </Page>
-      )
+      return <HomePage />
     case 'inbox':
       return (
         <Page title="Inbox">
@@ -73,40 +58,12 @@ export function PageFor({ route }: { route: MRoute }) {
           />
         </Page>
       )
-    case 'project': {
-      const project = SAMPLE_PROJECTS.find((p) => p.id === route.id)
-      return (
-        <Page eyebrow="Project" title={project?.name ?? 'Project not found'}>
-          <Coming
-            icon={<LayoutGrid size={22} />}
-            what="Shared Waiting / Doing / Review / Done board across teams, list and table views, milestones and the item side panel."
-            phase="phase 2 (Core model)"
-          />
-        </Page>
-      )
-    }
-    case 'team': {
-      const team = SAMPLE_TEAMS.find((t) => t.id === route.id)
-      return (
-        <Page eyebrow="Team board" title={team?.name ?? 'Team not found'}>
-          <Coming
-            icon={<LayoutGrid size={22} />}
-            what="The team's own stages with allowed moves, quick add in each column, review approvals and recurring runs."
-            phase="phase 2 (Core model)"
-          />
-        </Page>
-      )
-    }
+    case 'project':
+      return <ProjectPage projectId={route.id} />
+    case 'team':
+      return <TeamBoardPage teamId={route.id} />
     case 'item':
-      return (
-        <Page eyebrow="Item" title={route.key}>
-          <Coming
-            icon={<ClipboardList size={22} />}
-            what="Stage path, sub-items, reviews, comments, runs history and fields."
-            phase="phases 2 and 3"
-          />
-        </Page>
-      )
+      return <ItemFullPage itemKey={route.key} />
     case 'plan':
       return (
         <Page title="Calendar and workload">
@@ -138,15 +95,7 @@ export function PageFor({ route }: { route: MRoute }) {
         </Page>
       )
     case 'settings':
-      return (
-        <Page eyebrow="Team settings" title="Stages, fields and forms">
-          <Coming
-            icon={<Settings size={22} />}
-            what="Stages with their types and allowed moves, library and team fields, forms and recurring schedules."
-            phase="phase 2 (Core model)"
-          />
-        </Page>
-      )
+      return <SettingsPage teamId={route.teamId} />
     case 'kit':
       return (
         <Page

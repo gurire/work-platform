@@ -7,7 +7,8 @@ import { IconButton } from '../design/components'
 import { useTheme, type ThemeChoice } from '../design/theme'
 import { PageFor } from './pages'
 import { hrefFor, parseMRoute, type MRoute } from './routes'
-import { SAMPLE_PROJECTS, SAMPLE_TEAMS } from './nav-data'
+import { DataProvider, useAppData } from './data'
+import type { CoreProject, CoreTeam } from './core-api'
 import { Sidebar } from './Sidebar'
 
 const NEXT_CHOICE: Record<ThemeChoice, ThemeChoice> = {
@@ -26,7 +27,7 @@ interface Command {
   href: string
 }
 
-function commands(): Command[] {
+function commands(projects: CoreProject[], teams: CoreTeam[]): Command[] {
   return [
     { label: 'Go to My work', href: hrefFor({ page: 'home' }) },
     { label: 'Go to Inbox', href: hrefFor({ page: 'inbox' }) },
@@ -35,11 +36,11 @@ function commands(): Command[] {
     { label: 'Go to Requests', href: hrefFor({ page: 'requests' }) },
     { label: 'Go to Team settings', href: hrefFor({ page: 'settings' }) },
     { label: 'Open the component kit', href: hrefFor({ page: 'kit' }) },
-    ...SAMPLE_PROJECTS.map((p) => ({
+    ...projects.map((p) => ({
       label: `Project: ${p.name}`,
       href: hrefFor({ page: 'project', id: p.id }),
     })),
-    ...SAMPLE_TEAMS.map((t) => ({
+    ...teams.map((t) => ({
       label: `Team board: ${t.name}`,
       href: hrefFor({ page: 'team', id: t.id }),
     })),
@@ -51,9 +52,11 @@ function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null)
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
+  const { projects, teams } = useAppData()
   const list = useMemo(
-    () => commands().filter((c) => c.label.toLowerCase().includes(query.toLowerCase())),
-    [query],
+    () =>
+      commands(projects, teams).filter((c) => c.label.toLowerCase().includes(query.toLowerCase())),
+    [query, projects, teams],
   )
 
   useEffect(() => {
@@ -117,14 +120,14 @@ function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
   )
 }
 
-function titleFor(route: MRoute): string {
+function titleFor(route: MRoute, projects: CoreProject[], teams: CoreTeam[]): string {
   switch (route.page) {
     case 'home':
       return 'My work'
     case 'project':
-      return SAMPLE_PROJECTS.find((p) => p.id === route.id)?.name ?? 'Project'
+      return projects.find((p) => p.id === route.id)?.name ?? 'Project'
     case 'team':
-      return SAMPLE_TEAMS.find((t) => t.id === route.id)?.name ?? 'Team'
+      return teams.find((t) => t.id === route.id)?.name ?? 'Team'
     case 'item':
       return route.key
     case 'plan':
@@ -140,6 +143,15 @@ function titleFor(route: MRoute): string {
 
 /** The Midnight app: sidebar, top bar and the page for the current address. */
 export function AppShell() {
+  return (
+    <DataProvider>
+      <Shell />
+    </DataProvider>
+  )
+}
+
+function Shell() {
+  const { projects, teams, error } = useAppData()
   const [route, setRoute] = useState<MRoute>(() => parseMRoute(window.location.hash))
   const [menuOpen, setMenuOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -152,8 +164,8 @@ export function AppShell() {
   }, [])
 
   useEffect(() => {
-    document.title = `${titleFor(route)} · Work Platform`
-  }, [route])
+    document.title = `${titleFor(route, projects, teams)} · Work Platform`
+  }, [route, projects, teams])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -189,7 +201,7 @@ export function AppShell() {
           >
             <MenuIcon size={18} />
           </IconButton>
-          <span className="mx-crumb">{titleFor(route)}</span>
+          <span className="mx-crumb">{titleFor(route, projects, teams)}</span>
           <span className="mx-top-actions">
             <IconButton
               label={`Theme: ${CHOICE_LABEL[choice]}. Switch to ${CHOICE_LABEL[NEXT_CHOICE[choice]]}`}
@@ -206,6 +218,13 @@ export function AppShell() {
           </span>
         </header>
         <main id="mx-main" className="mx-main" tabIndex={-1}>
+          {error ? (
+            <div className="mx-page">
+              <p className="md-field-error" role="alert">
+                Could not load the workspace: {error}
+              </p>
+            </div>
+          ) : null}
           <PageFor route={route} />
         </main>
       </div>

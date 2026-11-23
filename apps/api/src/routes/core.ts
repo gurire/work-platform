@@ -212,6 +212,32 @@ export function registerCoreRoutes(
     }
   })
 
+  /** One item with its sub-items, by id or key. */
+  app.get<{ Params: { id: string } }>('/core/items/:id', async (request, reply) => {
+    const principal = await principalOr401(request, reply)
+    if (!principal) return
+    const teamIds = await visibleTeamIds(principal)
+    const [item] = await itemsWhere('(w.id = $1 OR w.key = $1) AND w.team_id = ANY($2)', [
+      request.params.id,
+      teamIds,
+    ])
+    if (!item) return reply.code(404).send({ error: 'not_found' })
+    return { item, subItems: await itemsWhere('w.parent_id = $1', [item.id]) }
+  })
+
+  /** My work: open items the caller owns, across the teams they can see. */
+  app.get('/core/me/items', async (request, reply) => {
+    const principal = await principalOr401(request, reply)
+    if (!principal) return
+    const teamIds = await visibleTeamIds(principal)
+    return {
+      items: await itemsWhere(
+        "w.assignee_id = $1 AND w.team_id = ANY($2) AND s.stage_type <> 'done'",
+        [principal.id, teamIds],
+      ),
+    }
+  })
+
   app.get<{ Params: { teamId: string } }>('/core/teams/:teamId/items', async (request, reply) => {
     const principal = await principalOr401(request, reply)
     if (!principal) return
