@@ -529,6 +529,7 @@
 }
 .md-tabs-segmented {
   display: inline-flex;
+  align-self: flex-start;
   padding: 4px;
   gap: 2px;
   border-radius: 12px;
@@ -615,10 +616,9 @@
   font-size: 13px;
   font-weight: 500;
 }
-.md-path-step + .md-path-step::before {
-  content: '→';
-  margin: 0 8px 0 -4px;
+.md-path-arrow {
   color: var(--muted);
+  font-size: 13px;
 }
 .md-path-past {
   background: var(--surface-2);
