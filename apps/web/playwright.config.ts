@@ -46,7 +46,9 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: 'pnpm exec vite --port 5173 --strictPort',
+      // Bind to 127.0.0.1 explicitly: Vite's default "localhost" can resolve to ::1 only (Node 17+),
+      // and then the 127.0.0.1 readiness check below never succeeds.
+      command: 'pnpm exec vite --host 127.0.0.1 --port 5173 --strictPort',
       url: 'http://127.0.0.1:5173/',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
