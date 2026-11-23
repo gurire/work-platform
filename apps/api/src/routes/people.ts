@@ -6,18 +6,18 @@
 import type { FastifyInstance } from 'fastify'
 import { decide } from '@wm/shared'
 import type { Db } from '../db/db.js'
+import { createKysely } from '../db/kysely.js'
 import { resolvePrincipal } from '../principal.js'
 
 export function registerPeopleRoutes(
   app: FastifyInstance,
   { db, devAuth }: { db: Db; devAuth: boolean },
 ): void {
+  const sql = createKysely(db)
   app.get('/people', async (request, reply) => {
     const principal = await resolvePrincipal(db, request, devAuth)
     if (!principal) return reply.code(401).send({ error: 'unauthenticated' })
-    const teams = await db.query<{ id: string; is_private: boolean }>(
-      'SELECT id, is_private FROM teams',
-    )
+    const teams = await sql.selectFrom('teams').select(['id', 'is_private']).execute()
     const visible = new Set(
       teams
         .filter(
@@ -27,12 +27,16 @@ export function registerPeopleRoutes(
         )
         .map((team) => team.id),
     )
-    const users = await db.query<{ id: string; name: string; org_role: string }>(
-      'SELECT id, name, org_role FROM users ORDER BY name',
-    )
-    const members = await db.query<{ user_id: string; team_id: string; role: string }>(
-      'SELECT user_id, team_id, role FROM team_members ORDER BY team_id',
-    )
+    const users = await sql
+      .selectFrom('users')
+      .select(['id', 'name', 'org_role'])
+      .orderBy('name')
+      .execute()
+    const members = await sql
+      .selectFrom('team_members')
+      .select(['user_id', 'team_id', 'role'])
+      .orderBy('team_id')
+      .execute()
     return {
       people: users.map((user) => ({
         id: user.id,

@@ -14,9 +14,12 @@
     "@electric-sql/pglite": "^0.5.15",
     "@wm/shared": "workspace:*",
     "aws-jwt-verify": "^5.2.1",
-    "fastify": "^5.0.0"
+    "fastify": "^5.0.0",
+    "kysely": "^0.29.9",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@types/pg": "^8.23.1",
     "tsx": "^4.0.0"
   }
 }
