@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/cdk.out
+.git
+docs
+specs
+e2e
+**/*.test.ts
+**/.env*
+infra
+.github
+scripts

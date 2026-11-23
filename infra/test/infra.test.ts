@@ -111,3 +111,50 @@ describe('access stack', () => {
     })
   })
 })
+
+function hosting(name: 'dev' | 'prod') {
+  const app = new App()
+  const stage = new AppStage(app, name, { config: ENVIRONMENTS[name] })
+  return Template.fromStack(stage.node.findChild('Hosting') as Stack)
+}
+
+describe('hosting stack', () => {
+  it('keeps the database private, encrypted and backed up for 14 days in prod', () => {
+    const t = hosting('prod')
+    t.hasResourceProperties('AWS::RDS::DBInstance', {
+      PubliclyAccessible: false,
+      StorageEncrypted: true,
+      BackupRetentionPeriod: 14,
+      DeletionProtection: true,
+      Engine: 'postgres',
+    })
+  })
+
+  it('runs the API on Fargate with database secrets, never plain passwords', () => {
+    const t = hosting('dev')
+    const defs = JSON.stringify(t.findResources('AWS::ECS::TaskDefinition'))
+    expect(defs).toContain('DATABASE_PASSWORD')
+    expect(defs).toContain('"Secrets"')
+    expect(defs).not.toMatch(/"Name":"DATABASE_PASSWORD","Value"/)
+    t.resourceCountIs('AWS::ECS::Service', 1)
+  })
+
+  it('serves the site over HTTPS and sends /api to the API', () => {
+    const t = hosting('dev')
+    t.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        DefaultCacheBehavior: Match.objectLike({ ViewerProtocolPolicy: 'redirect-to-https' }),
+        CacheBehaviors: Match.arrayWith([
+          Match.objectLike({ PathPattern: '/api/*', ViewerProtocolPolicy: 'https-only' }),
+        ]),
+      }),
+    })
+  })
+
+  it('alarms when the API stops answering', () => {
+    hosting('prod').hasResourceProperties('AWS::CloudWatch::Alarm', {
+      MetricName: 'HealthyHostCount',
+      ComparisonOperator: 'LessThanThreshold',
+    })
+  })
+})

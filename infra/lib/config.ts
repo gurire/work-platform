@@ -19,6 +19,8 @@ export interface EnvConfig {
   readonly appUrls: readonly string[]
   /** Prefix for the Cognito sign-in domain; must be unique in the region. */
   readonly authDomainPrefix: string
+  /** Who gets downtime alerts: the owner and a named deputy (WP-BRIEF-002). Set before go-live. */
+  readonly alertEmails: readonly string[]
 }
 
 export const ENVIRONMENTS: Record<EnvName, EnvConfig> = {
@@ -28,6 +30,7 @@ export const ENVIRONMENTS: Record<EnvName, EnvConfig> = {
     retainData: false,
     appUrls: ['http://localhost:5173/'],
     authDomainPrefix: 'gurire-wm-dev',
+    alertEmails: [],
   },
   prod: {
     name: 'prod',
@@ -35,6 +38,8 @@ export const ENVIRONMENTS: Record<EnvName, EnvConfig> = {
     retainData: true,
     appUrls: ['https://work-platform.invalid/'],
     authDomainPrefix: 'gurire-wm-prod',
+    // Owner and deputy addresses go here before go-live (open decision in the brief).
+    alertEmails: [],
   },
 }
 
