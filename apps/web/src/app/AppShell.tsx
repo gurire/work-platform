@@ -8,7 +8,7 @@ import { useTheme, type ThemeChoice } from '../design/theme'
 import { PageFor } from './pages'
 import { hrefFor, parseMRoute, type MRoute } from './routes'
 import { DataProvider, useAppData } from './data'
-import type { CoreProject, CoreTeam } from './core-api'
+import { workApi, type CoreProject, type CoreTeam, type SearchResult } from './core-api'
 import { Sidebar } from './Sidebar'
 
 const NEXT_CHOICE: Record<ThemeChoice, ThemeChoice> = {
@@ -53,10 +53,29 @@ function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const { projects, teams } = useAppData()
+  const [found, setFound] = useState<SearchResult[]>([])
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) {
+      setFound([])
+      return
+    }
+    const timer = setTimeout(() => {
+      workApi.search(q).then(setFound, () => setFound([]))
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [query])
   const list = useMemo(
-    () =>
-      commands(projects, teams).filter((c) => c.label.toLowerCase().includes(query.toLowerCase())),
-    [query, projects, teams],
+    () => [
+      ...commands(projects, teams).filter((c) =>
+        c.label.toLowerCase().includes(query.toLowerCase()),
+      ),
+      ...found.map((r) => ({
+        label: `${r.key} ${r.title}${r.matched === 'comment' && r.snippet ? ` — “${r.snippet.slice(0, 60)}”` : ''}`,
+        href: hrefFor({ page: 'item', key: r.key }),
+      })),
+    ],
+    [query, projects, teams, found],
   )
 
   useEffect(() => {
@@ -112,9 +131,7 @@ function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
             {c.label}
           </li>
         ))}
-        {list.length === 0 ? (
-          <li className="mx-palette-empty">No matches. Item search arrives in phase 3.</li>
-        ) : null}
+        {list.length === 0 ? <li className="mx-palette-empty">No matches.</li> : null}
       </ul>
     </dialog>
   )

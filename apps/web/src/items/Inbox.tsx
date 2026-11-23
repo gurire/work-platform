@@ -20,6 +20,10 @@ export const WHAT: Record<InboxKind, string> = {
   review_approved: 'approved the review of',
   review_changes_requested: 'asked for changes on',
   commented: 'commented on',
+  run_started: 'started a new run of',
+  run_blocked: 'could not start the next run of',
+  request_new: 'sent a new request:',
+  request_update: 'updated the request',
 }
 
 const ICON: Record<InboxKind, typeof AtSign> = {
@@ -29,6 +33,10 @@ const ICON: Record<InboxKind, typeof AtSign> = {
   review_approved: Check,
   review_changes_requested: Undo2,
   commented: MessageSquare,
+  run_started: CheckCheck,
+  run_blocked: Undo2,
+  request_new: MessageSquare,
+  request_update: MessageSquare,
 }
 
 type Filter = 'all' | 'unread' | 'mentions' | 'reviews' | 'assigned'

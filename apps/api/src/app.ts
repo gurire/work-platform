@@ -11,6 +11,8 @@ import { registerCommentRoutes } from './routes/comments.js'
 import { registerDashboardRoutes } from './routes/dashboards.js'
 import { registerPeopleRoutes } from './routes/people.js'
 import { registerCoreRoutes } from './routes/core.js'
+import { registerWorkRoutes } from './routes/work.js'
+import { memoryFileStore, type FileStore } from './files.js'
 
 export interface AppOptions {
   /** Without a database only the health and meta routes exist. */
@@ -21,6 +23,8 @@ export interface AppOptions {
   codeWebhookSecret?: string
   /** Checks Cognito ID tokens (specs/sign-in.md). Without it, only development sign-in works. */
   verifyIdToken?: IdTokenVerifier
+  /** Where attachment bytes go. Defaults to memory (tests). */
+  files?: FileStore
 }
 
 export function buildApp(options: AppOptions = {}): FastifyInstance {
@@ -39,6 +43,11 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
     if (options.verifyIdToken) registerAuth(app, options.db, options.verifyIdToken)
     registerItemRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerCoreRoutes(app, { db: options.db, devAuth: options.devAuth === true })
+    registerWorkRoutes(app, {
+      db: options.db,
+      devAuth: options.devAuth === true,
+      files: options.files ?? memoryFileStore(),
+    })
     registerReviewRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerRecordRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerBoardRoutes(app, { db: options.db, devAuth: options.devAuth === true })

@@ -11,8 +11,8 @@ import {
   StatusTag,
   Tabs,
 } from '../design/components'
-import { coreApi, type CoreItem, type CoreTeam } from './core-api'
-import { nameOf, useAppData, useLoad } from './data'
+import { coreApi, workApi, type CoreItem, type CoreTeam } from './core-api'
+import { nameOf, plainText, useAppData, useLoad } from './data'
 import { isOverdue, ItemCard, ItemDetail, QuickAdd, shortDate } from './work'
 
 function SidePanel({
@@ -479,9 +479,7 @@ export function HomePage() {
           )
         })}
       </Card>
-      <p className="md-meta">
-        Reviews waiting on you, mentions and stuck items arrive with phase 3.
-      </p>
+      <HomeInbox onOpen={setSelected} />
       <SidePanel itemId={selected} onClose={() => setSelected(null)} onChanged={mine.reload} />
     </div>
   )
@@ -492,6 +490,46 @@ export function ItemFullPage({ itemKey }: { itemKey: string }) {
   return (
     <div className="mx-page">
       <ItemDetail itemId={itemKey} fullPage onChanged={refresh} />
+    </div>
+  )
+}
+
+function HomeInbox({ onOpen }: { onOpen: (id: string) => void }) {
+  const { people } = useAppData()
+  const loaded = useLoad(() => workApi.inbox(), 'home-inbox')
+  const unread = (loaded.data?.entries ?? []).filter((e) => !e.read)
+  const reviews = unread.filter((e) => e.kind === 'review_requested')
+  const mentions = unread.filter((e) => e.kind === 'mentioned')
+  return (
+    <div className="mx-settings-grid">
+      <Card className="mx-list-group">
+        <h2 className="mx-list-head">Waiting on my review</h2>
+        {reviews.length === 0 ? <p className="mx-pad md-meta">No reviews waiting on you.</p> : null}
+        {reviews.map((e) => (
+          <button key={e.id} type="button" className="mx-list-row" onClick={() => onOpen(e.itemId)}>
+            <span className="mx-grow">
+              <span className="mx-block">{e.itemTitle}</span>
+              <span className="md-meta">
+                {e.itemKey} · asked by {nameOf(people, e.actorId)}
+              </span>
+            </span>
+          </button>
+        ))}
+      </Card>
+      <Card className="mx-list-group">
+        <h2 className="mx-list-head">Mentions</h2>
+        {mentions.length === 0 ? <p className="mx-pad md-meta">No new mentions.</p> : null}
+        {mentions.map((e) => (
+          <button key={e.id} type="button" className="mx-list-row" onClick={() => onOpen(e.itemId)}>
+            <span className="mx-grow">
+              <span className="mx-block">
+                {nameOf(people, e.actorId)} on {e.itemTitle}
+              </span>
+              {e.excerpt ? <span className="md-meta">“{plainText(e.excerpt)}”</span> : null}
+            </span>
+          </button>
+        ))}
+      </Card>
     </div>
   )
 }

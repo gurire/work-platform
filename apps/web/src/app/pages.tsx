@@ -1,9 +1,10 @@
-import { CalendarDays, ClipboardList, Inbox, LayoutGrid, Shapes } from 'lucide-react'
+import { CalendarDays, ClipboardList, LayoutGrid, Shapes } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Card, EmptyState } from '../design/components'
 import type { MRoute } from './routes'
 import { HomePage, ItemFullPage, ProjectPage, TeamBoardPage } from './boards'
 import { SettingsPage } from './settings'
+import { InboxPage } from './inbox'
 import { KitPage } from './KitPage'
 import { hrefFor } from './routes'
 
@@ -49,15 +50,7 @@ export function PageFor({ route }: { route: MRoute }) {
     case 'home':
       return <HomePage />
     case 'inbox':
-      return (
-        <Page title="Inbox">
-          <Coming
-            icon={<Inbox size={22} />}
-            what="Mentions, reviews asked of you, items sent back, and runs that could not start."
-            phase="phase 3 (Working together)"
-          />
-        </Page>
-      )
+      return <InboxPage />
     case 'project':
       return <ProjectPage projectId={route.id} />
     case 'team':
