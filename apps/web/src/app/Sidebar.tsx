@@ -2,7 +2,10 @@ import { BarChart3, CalendarDays, Home, Inbox, Plus, Search, Settings } from 'lu
 import type { ReactNode } from 'react'
 import { Avatar, Counter } from '../design/components'
 import { hrefFor, type MRoute } from './routes'
-import { SAMPLE_PROJECTS, SAMPLE_TEAMS } from './nav-data'
+import { useState } from 'react'
+import { Button, Dialog } from '../design/components'
+import { coreApi } from './core-api'
+import { useAppData } from './data'
 
 interface SidebarProps {
   route: MRoute
@@ -35,6 +38,11 @@ function NavLink({
 
 /** Projects first, then teams (WP-BRIEF-002, Screens). */
 export function Sidebar({ route, open, onSearch, onNavigate }: SidebarProps) {
+  const { projects, teams, me, refresh } = useAppData()
+  const [creating, setCreating] = useState(false)
+  const [name, setName] = useState('')
+  const [colour, setColour] = useState(1)
+  const [error, setError] = useState<string | null>(null)
   const is = (page: MRoute['page'], id?: string) =>
     route.page === page && (id === undefined || ('id' in route && route.id === id))
   return (
@@ -97,17 +105,29 @@ export function Sidebar({ route, open, onSearch, onNavigate }: SidebarProps) {
       </div>
 
       <div className="mx-group">
-        <span className="md-eyebrow mx-group-head">Projects</span>
-        {SAMPLE_PROJECTS.map((p) => (
-          <NavLink
-            key={p.id}
-            href={hrefFor({ page: 'project', id: p.id })}
-            active={is('project', p.id)}
-            icon={<span className={`mx-swatch mx-project-${p.colour}`} aria-hidden="true" />}
+        <span className="mx-group-head mx-group-head-row">
+          <span className="md-eyebrow">Projects</span>
+          <button
+            type="button"
+            className="mx-mini-btn"
+            aria-label="New project"
+            onClick={() => setCreating(true)}
           >
-            {p.name}
-          </NavLink>
-        ))}
+            +
+          </button>
+        </span>
+        {projects
+          .filter((p) => !p.archived)
+          .map((p) => (
+            <NavLink
+              key={p.id}
+              href={hrefFor({ page: 'project', id: p.id })}
+              active={is('project', p.id)}
+              icon={<span className={`mx-swatch mx-project-${p.colour}`} aria-hidden="true" />}
+            >
+              {p.name}
+            </NavLink>
+          ))}
         <NavLink href={hrefFor({ page: 'requests' })} active={is('requests')}>
           Requests
         </NavLink>
@@ -115,7 +135,7 @@ export function Sidebar({ route, open, onSearch, onNavigate }: SidebarProps) {
 
       <div className="mx-group">
         <span className="md-eyebrow mx-group-head">Teams</span>
-        {SAMPLE_TEAMS.map((t) => (
+        {teams.map((t) => (
           <NavLink key={t.id} href={hrefFor({ page: 'team', id: t.id })} active={is('team', t.id)}>
             {t.name}
           </NavLink>
@@ -131,13 +151,63 @@ export function Sidebar({ route, open, onSearch, onNavigate }: SidebarProps) {
           Team settings
         </NavLink>
         <div className="mx-me">
-          <Avatar name="You" size={32} />
+          <Avatar name={me?.name ?? null} size={32} />
           <span className="mx-brand-text">
-            <span className="md-strong">You</span>
+            <span className="md-strong">{me?.name ?? '…'}</span>
             <span className="md-meta">Signed in</span>
           </span>
         </div>
       </div>
+      <Dialog
+        open={creating}
+        title="New project"
+        onClose={() => setCreating(false)}
+        actions={
+          <>
+            <Button onClick={() => setCreating(false)}>Cancel</Button>
+            <Button
+              kind="primary"
+              disabled={!name.trim()}
+              onClick={async () => {
+                setError(null)
+                try {
+                  const { project } = await coreApi.createProject(name.trim(), colour)
+                  setCreating(false)
+                  setName('')
+                  refresh()
+                  window.location.hash = hrefFor({ page: 'project', id: project.id })
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : String(e))
+                }
+              }}
+            >
+              Create project
+            </Button>
+          </>
+        }
+      >
+        <label className="md-field">
+          <span className="md-field-label">Name</span>
+          <input className="md-input" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <div className="md-field">
+          <span className="md-field-label">Colour</span>
+          <span className="mx-row" role="radiogroup" aria-label="Colour">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((c) => (
+              <button
+                key={c}
+                type="button"
+                role="radio"
+                aria-checked={colour === c}
+                aria-label={`Colour ${c}`}
+                className={`mx-colour mx-project-${c}`}
+                onClick={() => setColour(c)}
+              />
+            ))}
+          </span>
+        </div>
+        {error ? <span className="md-field-error">{error}</span> : null}
+      </Dialog>
     </nav>
   )
 }

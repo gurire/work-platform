@@ -245,3 +245,21 @@ describe('fields', () => {
     ).toBe(409)
   })
 })
+
+describe('reading items', () => {
+  it('finds an item by key with its sub-items, and lists my open items', async () => {
+    const parent = await call('ana', 'POST', '/core/items', { teamId: 'DATA', title: 'Mine' })
+    await call('ana', 'POST', '/core/items', {
+      teamId: 'DATA',
+      title: 'Part',
+      parentId: parent.body.item.id,
+    })
+    await call('ana', 'PATCH', `/items/${parent.body.item.id}`, { assigneeId: 'ana' })
+    const one = await call('ana', 'GET', `/core/items/${parent.body.item.key}`)
+    expect(one.body.item.id).toBe(parent.body.item.id)
+    expect(one.body.subItems.map((s: any) => s.title)).toEqual(['Part'])
+    const mine = await call('ana', 'GET', '/core/me/items')
+    expect(mine.body.items.map((i: any) => i.id)).toContain(parent.body.item.id)
+    expect((await call('ana', 'GET', '/core/items/NOPE-1')).status).toBe(404)
+  })
+})
