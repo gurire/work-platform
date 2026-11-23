@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { ItemsScreen } from './items/ItemsScreen'
 import { authConfig, finishSignIn, isSignedIn, startSignIn } from './auth/auth'
 import { SignIn } from './auth/SignIn'
+import { AppShell } from './app/AppShell'
+import { isMidnightHash } from './app/routes'
 import './items/items.css'
 import './shell/shell.css'
 
@@ -13,6 +15,14 @@ export function App() {
     auth ? 'checking' : 'signed-in',
   )
   const [message, setMessage] = useState<string | null>(null)
+  // The new Midnight app answers #/m/… addresses while the old screens are replaced.
+  const [midnight, setMidnight] = useState(() => isMidnightHash(window.location.hash))
+
+  useEffect(() => {
+    const onHash = () => setMidnight(isMidnightHash(window.location.hash))
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
 
   useEffect(() => {
     if (!auth) return
@@ -40,5 +50,5 @@ export function App() {
           : 'light'
     return <SignIn message={message} onSignIn={() => void startSignIn(auth)} />
   }
-  return <ItemsScreen />
+  return midnight ? <AppShell /> : <ItemsScreen />
 }

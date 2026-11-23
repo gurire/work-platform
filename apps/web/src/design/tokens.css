@@ -17,6 +17,16 @@
   --focus-ring: #5e6ad2;
   --on-accent: #ffffff;
 
+  /* Project colours (specs/data-model.md: a fixed set of 8). */
+  --project-1: #6366f1;
+  --project-2: #14b8a6;
+  --project-3: #f97316;
+  --project-4: #a855f7;
+  --project-5: #ec4899;
+  --project-6: #eab308;
+  --project-7: #22c55e;
+  --project-8: #3b82f6;
+
   --font: 'Inter Variable', 'Inter', system-ui, sans-serif;
   --radius-card: 12px;
   --radius-control: 8px;

@@ -2,7 +2,14 @@
  * The Midnight component kit (specs/design-system.md, section 6).
  * Every component reads colours from tokens.css only; styles live in components.css.
  */
-import { useEffect, useId, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useRef,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+} from 'react'
 import { ArrowDown, ArrowUp, Minus, X } from 'lucide-react'
 
 function cx(...parts: (string | false | null | undefined)[]): string {
@@ -339,18 +346,24 @@ export function StagePath({
   return (
     <ol className="md-path" aria-label="Stages">
       {stages.map((s, i) => (
-        <li
-          key={s.name}
-          className={cx(
-            'md-path-step',
-            i < current && 'md-path-past',
-            i === current && `md-path-current md-tag-${s.type}`,
-            i > current && 'md-path-next',
-          )}
-          aria-current={i === current ? 'step' : undefined}
-        >
-          {s.name}
-        </li>
+        <Fragment key={s.name}>
+          {i > 0 ? (
+            <li className="md-path-arrow" aria-hidden="true">
+              →
+            </li>
+          ) : null}
+          <li
+            className={cx(
+              'md-path-step',
+              i < current && 'md-path-past',
+              i === current && `md-path-current md-tag-${s.type}`,
+              i > current && 'md-path-next',
+            )}
+            aria-current={i === current ? 'step' : undefined}
+          >
+            {s.name}
+          </li>
+        </Fragment>
       ))}
     </ol>
   )

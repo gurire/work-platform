@@ -1,0 +1,330 @@
+/* Layout of the Midnight app. Colours come only from design/tokens.css. */
+
+.mx-app {
+  display: flex;
+  min-height: 100vh;
+}
+
+.mx-skip {
+  position: absolute;
+  left: 8px;
+  top: -40px;
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  z-index: 10;
+}
+.mx-skip:focus {
+  top: 8px;
+}
+
+/* Sidebar */
+.mx-side {
+  flex: 0 0 248px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 14px;
+  background: var(--side-bg);
+  border-right: 1px solid var(--divider);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+.mx-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+}
+.mx-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--on-accent);
+  background: linear-gradient(180deg, var(--accent-top), var(--accent));
+  box-shadow: var(--btn-glow);
+}
+.mx-brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mx-brand-name {
+  font-size: 15px;
+  font-weight: 700;
+}
+.mx-side-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mx-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mx-kbd {
+  white-space: nowrap;
+  margin-left: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--divider);
+  color: var(--muted);
+}
+.mx-new {
+  justify-content: flex-start;
+  text-decoration: none;
+}
+[data-ui='midnight'] a.mx-new {
+  color: var(--on-accent);
+}
+.mx-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mx-group-head {
+  padding: 0 10px 6px;
+}
+[data-ui='midnight'] .mx-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-control);
+  color: var(--text-2);
+  text-decoration: none;
+}
+[data-ui='midnight'] .mx-nav:hover {
+  background: var(--surface-2);
+}
+[data-ui='midnight'] .mx-nav[aria-current='page'] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.mx-nav-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mx-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: 0 0 9px;
+}
+.mx-project-1 {
+  background: var(--project-1);
+}
+.mx-project-2 {
+  background: var(--project-2);
+}
+.mx-project-3 {
+  background: var(--project-3);
+}
+.mx-project-4 {
+  background: var(--project-4);
+}
+.mx-project-5 {
+  background: var(--project-5);
+}
+.mx-project-6 {
+  background: var(--project-6);
+}
+.mx-project-7 {
+  background: var(--project-7);
+}
+.mx-project-8 {
+  background: var(--project-8);
+}
+.mx-side-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mx-me {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 10px 0;
+  border-top: 1px solid var(--divider);
+}
+
+/* Main column */
+.mx-main-col {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mx-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 40px;
+  border-bottom: 1px solid var(--divider);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  backdrop-filter: blur(8px);
+}
+.mx-crumb {
+  font-weight: 600;
+  color: var(--muted);
+}
+.mx-top-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.mx-menu-btn {
+  display: none;
+}
+.mx-main {
+  outline: none;
+}
+.mx-page {
+  box-sizing: border-box;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 36px 40px 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.mx-page-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mx-intro {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* Kit page */
+.mx-kit {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.mx-kit .md-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.mx-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.mx-align-top {
+  align-items: flex-start;
+}
+.mx-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+/* Palette */
+.mx-palette {
+  width: 560px;
+  max-width: 92vw;
+  margin-top: 12vh;
+  padding: 0;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: var(--float-shadow);
+}
+.mx-palette::backdrop {
+  background: var(--overlay);
+}
+.mx-palette-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 52px;
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--divider);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+.mx-palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.mx-palette-item {
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+.mx-palette-item[aria-selected='true'] {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.mx-palette-empty {
+  padding: 14px;
+  color: var(--muted);
+}
+
+/* Narrow screens: the sidebar becomes a menu */
+@media (max-width: 900px) {
+  .mx-side {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 5;
+    transform: translateX(-100%);
+    transition: transform var(--motion-panel);
+    background: var(--surface);
+  }
+  .mx-side-open {
+    transform: none;
+    box-shadow: var(--float-shadow);
+  }
+  .mx-menu-btn {
+    display: inline-flex;
+  }
+  .mx-top {
+    padding: 10px 16px;
+  }
+  .mx-page {
+    padding: 24px 16px 40px;
+  }
+  .mx-grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
