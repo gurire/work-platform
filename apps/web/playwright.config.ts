@@ -37,7 +37,11 @@ export default defineConfig({
     {
       command: 'pnpm --filter @wm/api exec tsx src/server.ts',
       url: 'http://127.0.0.1:3000/health',
-      env: { PORT: '3000', WM_DATA_DIR: process.env.WM_E2E_DATA_DIR ?? '' },
+      // Only override WM_DATA_DIR when asked: an empty value makes the API's mkdirSync('') fail.
+      env: {
+        PORT: '3000',
+        ...(process.env.WM_E2E_DATA_DIR ? { WM_DATA_DIR: process.env.WM_E2E_DATA_DIR } : {}),
+      },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
