@@ -84,3 +84,8 @@ export function nameOf(people: Person[], id: string | null): string | null {
   if (!id) return null
   return people.find((p) => p.id === id)?.name ?? id
 }
+
+/** Comment text for one-line previews: mentions shown as @Name. */
+export function plainText(body: string): string {
+  return body.replace(/@\[([^\]\n]{1,80})\]\([A-Za-z0-9_-]{1,64}\)/g, '@$1')
+}

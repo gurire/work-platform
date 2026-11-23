@@ -10,7 +10,9 @@ import {
   PriorityTag,
   StagePath,
   StatusTag,
+  Tabs,
 } from '../design/components'
+import { CommentsPanel, Description, FilesPanel, ReviewPanel, RunsPanel } from './collab'
 import { coreApi, type CoreItem, type CoreTeam, type Workflow } from './core-api'
 import { nameOf, useAppData, useLoad } from './data'
 import { hrefFor } from './routes'
@@ -126,6 +128,7 @@ export function ItemDetail({ itemId, onClose, onChanged, fullPage = false }: Ite
   const { people, teams, projects } = useAppData()
   const [version, setVersion] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState<'comments' | 'review' | 'runs' | 'files'>('comments')
   const loaded = useLoad(async () => {
     const { item: found, subItems } = await coreApi.item(itemId)
     const [workflow, project] = await Promise.all([
@@ -370,7 +373,41 @@ export function ItemDetail({ itemId, onClose, onChanged, fullPage = false }: Ite
       ) : (
         <p className="md-meta">This is a sub-item; it follows its parent’s project.</p>
       )}
-      <p className="md-meta">Comments, reviews and runs arrive in phase 3.</p>
+      <Description item={item} canEdit={team?.canCreate ?? false} />
+      <Tabs
+        label="Item activity"
+        value={tab}
+        onChange={setTab}
+        options={[
+          { id: 'comments', label: 'Comments' },
+          { id: 'review', label: 'Review' },
+          { id: 'runs', label: 'Runs' },
+          { id: 'files', label: 'Files' },
+        ]}
+      />
+      {tab === 'comments' ? <CommentsPanel itemId={item.id} /> : null}
+      {tab === 'review' ? (
+        <ReviewPanel
+          item={item}
+          team={team}
+          onChanged={() => {
+            setVersion((v) => v + 1)
+            onChanged()
+          }}
+        />
+      ) : null}
+      {tab === 'runs' ? (
+        <RunsPanel
+          item={item}
+          team={team}
+          canEdit={team?.canCreate ?? false}
+          onChanged={() => {
+            setVersion((v) => v + 1)
+            onChanged()
+          }}
+        />
+      ) : null}
+      {tab === 'files' ? <FilesPanel itemId={item.id} /> : null}
     </div>
   )
 }

@@ -48,5 +48,9 @@ export const INBOX_KINDS = [
   'review_approved',
   'review_changes_requested',
   'commented',
+  'run_started',
+  'run_blocked',
+  'request_new',
+  'request_update',
 ] as const
 export type InboxKind = (typeof INBOX_KINDS)[number]

@@ -459,6 +459,101 @@ const MIGRATIONS: readonly { id: string; sql: string }[] = [
         ('lib-frequency', NULL, 'frequency', 'Frequency', 'pick_one', '["Monthly","Quarterly","Yearly"]', 3);
     `,
   },
+  {
+    // Working together (ADR 0008 phase 3): recurring runs, descriptions, attachments, search,
+    // and new inbox kinds. Expand only.
+    id: '0012_working_together',
+    sql: `
+      ALTER TABLE work_items ADD COLUMN description text CHECK (length(description) <= 20000);
+      ALTER TABLE work_items ADD COLUMN current_run integer;
+      ALTER TABLE stage_history ADD COLUMN run_number integer;
+      ALTER TABLE comments ADD COLUMN run_number integer;
+
+      CREATE TABLE item_schedules (
+        item_id        text PRIMARY KEY REFERENCES work_items (id),
+        rule           jsonb NOT NULL,
+        start_stage    text NOT NULL,
+        owner_id       text REFERENCES users (id),
+        tz             text NOT NULL DEFAULT 'Asia/Kolkata',
+        next_at        timestamptz NOT NULL,
+        pending_start  boolean NOT NULL DEFAULT false,
+        created_by     text NOT NULL REFERENCES users (id),
+        created_at     timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX item_schedules_due ON item_schedules (next_at);
+      CREATE TABLE item_runs (
+        item_id       text NOT NULL REFERENCES work_items (id),
+        number        integer NOT NULL,
+        started_at    timestamptz NOT NULL DEFAULT now(),
+        started_by    text NOT NULL CHECK (started_by IN ('schedule', 'manual')),
+        starter_id    text REFERENCES users (id),
+        start_stage   text NOT NULL,
+        ended_at      timestamptz,
+        outcome       text CHECK (outcome IN ('completed', 'cancelled')),
+        field_values  jsonb,
+        PRIMARY KEY (item_id, number)
+      );
+
+      -- Stage passes and comments belong to the item's current run, if it has one.
+      CREATE FUNCTION tag_current_run() RETURNS trigger AS $fn$
+      BEGIN
+        IF NEW.run_number IS NULL THEN
+          SELECT current_run INTO NEW.run_number FROM work_items WHERE id = NEW.item_id;
+        END IF;
+        RETURN NEW;
+      END;
+      $fn$ LANGUAGE plpgsql;
+      CREATE TRIGGER stage_history_run BEFORE INSERT ON stage_history
+        FOR EACH ROW EXECUTE FUNCTION tag_current_run();
+      CREATE TRIGGER comments_run BEFORE INSERT ON comments
+        FOR EACH ROW EXECUTE FUNCTION tag_current_run();
+
+      -- A run ends when its item reaches a Done stage; it keeps the field values of that moment.
+      CREATE FUNCTION end_run_on_done() RETURNS trigger AS $fn$
+      DECLARE
+        stype text;
+        outcome_ text;
+      BEGIN
+        SELECT s.stage_type, s.done_outcome INTO stype, outcome_
+          FROM work_items w JOIN stages s ON s.team_id = w.team_id AND s.key = NEW.stage_key
+          WHERE w.id = NEW.item_id;
+        IF stype = 'done' AND NEW.run_number IS NOT NULL THEN
+          UPDATE item_runs r SET ended_at = now(), outcome = COALESCE(outcome_, 'completed'),
+            field_values = jsonb_build_object('fields', w.fields, 'dueOn', w.due_on,
+              'estimate', w.estimate, 'labels', to_jsonb(w.labels), 'ownerId', w.assignee_id)
+          FROM work_items w
+          WHERE w.id = NEW.item_id AND r.item_id = NEW.item_id AND r.number = NEW.run_number
+            AND r.ended_at IS NULL;
+        END IF;
+        RETURN NEW;
+      END;
+      $fn$ LANGUAGE plpgsql;
+      CREATE TRIGGER stage_history_end_run AFTER INSERT ON stage_history
+        FOR EACH ROW EXECUTE FUNCTION end_run_on_done();
+
+      CREATE TABLE attachments (
+        id            text PRIMARY KEY,
+        item_id       text NOT NULL REFERENCES work_items (id),
+        name          text NOT NULL CHECK (length(name) BETWEEN 1 AND 200),
+        content_type  text NOT NULL,
+        size_bytes    integer NOT NULL CHECK (size_bytes BETWEEN 1 AND 26214400),
+        storage_key   text NOT NULL,
+        uploaded_by   text NOT NULL REFERENCES users (id),
+        created_at    timestamptz NOT NULL DEFAULT now(),
+        deleted_at    timestamptz
+      );
+      CREATE INDEX attachments_item ON attachments (item_id);
+
+      CREATE INDEX work_items_search ON work_items
+        USING gin (to_tsvector('simple', title || ' ' || coalesce(description, '')));
+      CREATE INDEX comments_search ON comments USING gin (to_tsvector('simple', body));
+
+      ALTER TABLE inbox DROP CONSTRAINT inbox_kind_check;
+      ALTER TABLE inbox ADD CONSTRAINT inbox_kind_check CHECK (kind IN ('mentioned', 'assigned',
+        'review_requested', 'review_approved', 'review_changes_requested', 'commented',
+        'run_started', 'run_blocked', 'request_new', 'request_update'));
+    `,
+  },
 ]
 
 export async function migrate(db: Db): Promise<string[]> {

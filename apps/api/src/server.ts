@@ -2,6 +2,8 @@ import { mkdirSync } from 'node:fs'
 import { buildApp } from './app.js'
 import { createPgliteDb, type Db } from './db/db.js'
 import { createPgDb } from './db/pg.js'
+import { diskFileStore } from './files.js'
+import { runDueSchedules } from './runs.js'
 import { migrate } from './db/migrations.js'
 import { seedDevData } from './db/seed.js'
 import { cognitoVerifier } from './cognito.js'
@@ -53,7 +55,16 @@ async function main(): Promise<void> {
     devAuth,
     codeWebhookSecret,
     ...(verifyIdToken ? { verifyIdToken } : {}),
+    files: diskFileStore(process.env['WM_FILES_DIR'] ?? '.data/files'),
   })
+  // Recurring runs: check for due schedules every minute.
+  const tick = () =>
+    void runDueSchedules(db).then(
+      (r) => r.started + r.blocked > 0 && app.log.info(r, 'recurring runs'),
+      (error: unknown) => app.log.error({ error }, 'recurring runs failed'),
+    )
+  setInterval(tick, 60_000).unref()
+  tick()
   if (applied.length > 0) app.log.info({ applied }, 'migrations applied')
   if (devAuth) {
     app.log.warn('Development sign-in is ON: callers choose their user with the x-dev-user header.')

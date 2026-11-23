@@ -235,3 +235,187 @@ export const coreApi = {
   addField: (teamId: string, label: string, type: FieldType, options: string[]) =>
     request<unknown>(`/core/teams/${enc(teamId)}/fields`, json('POST', { label, type, options })),
 }
+
+/* Phase 3: working together */
+
+export interface CommentView {
+  id: string
+  authorId: string
+  body: string | null
+  internal: boolean
+  createdAt: string
+  editedAt: string | null
+  deletedAt: string | null
+  canEdit: boolean
+  canDelete: boolean
+}
+
+export interface ReviewRound {
+  id: string
+  number: number
+  stageKey: string
+  requestedBy: string
+  openedAt: string
+  state: 'open' | 'approved' | 'changes_requested' | 'withdrawn'
+  reviewers: {
+    userId: string
+    verdict: 'approved' | 'changes_requested' | null
+    comment: string | null
+    at: string | null
+  }[]
+}
+
+export interface Reviews {
+  reviewStage: { stageKey: string; sendBackTo: string } | null
+  approved: boolean
+  canOpen: boolean
+  canVerdict: boolean
+  canWithdraw: boolean
+  rounds: ReviewRound[]
+}
+
+export interface RunView {
+  number: number
+  startedAt: string
+  startedBy: 'schedule' | 'manual'
+  starterId: string | null
+  startStage: string
+  endedAt: string | null
+  outcome: 'completed' | 'cancelled' | null
+  fieldValues: {
+    fields?: Record<string, unknown>
+    dueOn?: string | null
+    estimate?: number | null
+    ownerId?: string | null
+  } | null
+  passes: { stageKey: string; ownerId: string | null; enteredAt: string; leftAt: string | null }[]
+  comments: number
+}
+
+export interface ScheduleView {
+  rule: import('@wm/shared').ScheduleRule
+  text: string
+  startStage: string
+  ownerId: string | null
+  nextAt: string
+  waitingForOpenRun?: boolean
+}
+
+export interface Attachment {
+  id: string
+  name: string
+  contentType: string
+  size: number
+  uploadedBy: string
+  createdAt: string
+}
+
+export interface InboxEntry {
+  id: string
+  kind: string
+  itemId: string
+  itemKey: string
+  itemTitle: string
+  actorId: string | null
+  excerpt: string | null
+  createdAt: string
+  read: boolean
+}
+
+export interface SearchResult {
+  id: string
+  key: string
+  title: string
+  teamId: string
+  stageKey: string
+  matched: 'title' | 'comment'
+  snippet: string | null
+}
+
+export const workApi = {
+  comments: (id: string) =>
+    request<{ canComment: boolean; comments: CommentView[] }>(`/items/${enc(id)}/comments`),
+  addComment: (id: string, body: string) =>
+    request<{ comments: CommentView[] }>(
+      `/items/${enc(id)}/comments`,
+      json('POST', { body, internal: false }),
+    ),
+  deleteComment: (commentId: string) =>
+    request<unknown>(`/comments/${enc(commentId)}`, { method: 'DELETE' }),
+  reviews: (id: string) => request<Reviews>(`/items/${enc(id)}/reviews`),
+  openReview: (id: string, reviewers: string[]) =>
+    request<Reviews>(`/items/${enc(id)}/reviews`, json('POST', { reviewers })),
+  verdict: (roundId: string, verdict: 'approved' | 'changes_requested', comment: string) =>
+    request<Reviews>(
+      `/reviews/${enc(roundId)}/verdict`,
+      json('POST', comment.trim() ? { verdict, comment } : { verdict }),
+    ),
+  description: (id: string) =>
+    request<{ description: string | null }>(`/core/items/${enc(id)}/description`).then(
+      (b) => b.description,
+    ),
+  setDescription: (id: string, description: string) =>
+    request<unknown>(`/core/items/${enc(id)}/description`, json('PUT', { description })),
+  runs: (id: string) =>
+    request<{ schedule: ScheduleView | null; runs: RunView[] }>(`/core/items/${enc(id)}/runs`),
+  setSchedule: (
+    id: string,
+    rule: import('@wm/shared').ScheduleRule | null,
+    startStage?: string,
+    ownerId?: string | null,
+  ) =>
+    request<unknown>(
+      `/core/items/${enc(id)}/schedule`,
+      json('PUT', rule ? { rule, startStage, ownerId: ownerId ?? null } : { rule: null }),
+    ),
+  startRun: (id: string) =>
+    request<{ number: number }>(`/core/items/${enc(id)}/runs`, json('POST', {})),
+  attachments: (id: string) =>
+    request<{ attachments: Attachment[] }>(`/core/items/${enc(id)}/attachments`).then(
+      (b) => b.attachments,
+    ),
+  upload: async (id: string, file: File) => {
+    const identity: Record<string, string> = auth
+      ? { authorization: `Bearer ${(await idToken(auth)) ?? ''}` }
+      : { 'x-dev-user': devUser() }
+    const res = await fetch(
+      `/api/core/items/${enc(id)}/attachments?name=${enc(file.name)}&type=${enc(file.type || 'application/octet-stream')}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/octet-stream', ...identity },
+        body: file,
+      },
+    )
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      throw new Error(
+        body.error === 'file_type_not_allowed'
+          ? 'only pictures, documents, PDFs and spreadsheets can be attached'
+          : body.error === 'file_too_large'
+            ? 'files can be up to 25 MB'
+            : (body.error ?? `upload failed (${res.status})`),
+      )
+    }
+  },
+  download: async (attachment: Attachment) => {
+    const identity: Record<string, string> = auth
+      ? { authorization: `Bearer ${(await idToken(auth)) ?? ''}` }
+      : { 'x-dev-user': devUser() }
+    const res = await fetch(`/api/core/attachments/${enc(attachment.id)}/content`, {
+      headers: identity,
+    })
+    if (!res.ok) throw new Error('the file could not be downloaded')
+    const url = URL.createObjectURL(await res.blob())
+    const a = document.createElement('a')
+    a.href = url
+    a.download = attachment.name
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  },
+  removeAttachment: (attachmentId: string) =>
+    request<unknown>(`/core/attachments/${enc(attachmentId)}`, { method: 'DELETE' }),
+  inbox: () => request<{ unread: number; entries: InboxEntry[] }>('/inbox'),
+  markRead: (ids?: string[]) => request<unknown>('/inbox/read', json('POST', ids ? { ids } : {})),
+  search: (q: string) =>
+    request<{ results: SearchResult[] }>(`/core/search?q=${enc(q)}`).then((b) => b.results),
+}
