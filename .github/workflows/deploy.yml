@@ -45,6 +45,15 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+      - name: Build the web app
+        run: pnpm --filter @wm/shared build && pnpm --filter @wm/web build
+      # cdk deploy builds the API image from apps/api/Dockerfile and pushes it itself.
       - name: cdk deploy
         working-directory: infra
-        run: pnpm exec cdk deploy "${{ github.event.inputs.stage || 'Dev' }}/*" --require-approval never
+        run: pnpm exec cdk deploy "${{ github.event.inputs.stage || 'Dev' }}/*" --require-approval never --outputs-file cdk-outputs.json
+      - name: Smoke test
+        working-directory: infra
+        run: |
+          url=$(node -e "const o=require('./cdk-outputs.json'); for (const s of Object.values(o)) if (s.SiteUrl) console.log(s.SiteUrl)")
+          for i in $(seq 1 20); do curl -fsS "${url}api/health" && exit 0; sleep 15; done
+          echo "::error::${url}api/health did not answer"; exit 1

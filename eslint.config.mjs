@@ -3,7 +3,16 @@ import tseslint from 'typescript-eslint'
 import globals from 'globals'
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/cdk.out/**', '**/coverage/**', '**/*.d.ts'] },
+  {
+    ignores: [
+      '**/dist/**',
+      '**/cdk.out/**',
+      '**/coverage/**',
+      '**/*.d.ts',
+      '**/playwright-report/**',
+      '**/test-results/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   { files: ['**/*.{js,mjs,cjs,ts}'], languageOptions: { globals: globals.node } },

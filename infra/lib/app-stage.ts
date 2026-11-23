@@ -3,6 +3,7 @@ import type { Construct } from 'constructs'
 import type { EnvConfig } from './config.js'
 import { FoundationStack } from './foundation-stack.js'
 import { AuthStack } from './auth-stack.js'
+import { HostingStack } from './hosting-stack.js'
 
 export interface AppStageProps extends StageProps {
   readonly config: EnvConfig
@@ -14,14 +15,22 @@ export class AppStage extends Stage {
     super(scope, id, props)
     const { config } = props
 
-    new FoundationStack(this, 'Foundation', {
+    const foundation = new FoundationStack(this, 'Foundation', {
       stackName: `${config.prefix}-foundation`,
       config,
     })
 
-    new AuthStack(this, 'Auth', {
+    const auth = new AuthStack(this, 'Auth', {
       stackName: `${config.prefix}-auth`,
       config,
+    })
+
+    new HostingStack(this, 'Hosting', {
+      stackName: `${config.prefix}-hosting`,
+      config,
+      attachmentsBucket: foundation.attachmentsBucket,
+      userPoolId: auth.userPool.userPoolId,
+      userPoolClientId: auth.webClient.userPoolClientId,
     })
 
     Tags.of(this).add('env', config.name)

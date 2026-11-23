@@ -14,6 +14,7 @@ import { registerCoreRoutes } from './routes/core.js'
 import { registerWorkRoutes } from './routes/work.js'
 import { registerViewRoutes } from './routes/views.js'
 import { registerLive } from './live.js'
+import { registerExportRoutes } from './routes/export.js'
 import { memoryFileStore, type FileStore } from './files.js'
 
 export interface AppOptions {
@@ -36,7 +37,16 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
     ajv: { customOptions: { removeAdditional: false } },
   })
 
-  app.get('/health', async () => ({ status: 'ok' }))
+  // The load balancer and downtime alerts call this; it fails when the database does not answer.
+  app.get('/health', async (_request, reply) => {
+    if (!options.db) return { status: 'ok' }
+    try {
+      await options.db.query('SELECT 1')
+      return { status: 'ok' }
+    } catch {
+      return reply.code(503).send({ status: 'database_unavailable' })
+    }
+  })
 
   // Placeholder route so web and mobile clients have something real to call.
   app.get('/meta/work-item-kinds', async () => ({ kinds: WORK_ITEM_KINDS }))
@@ -52,6 +62,7 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
     })
     registerViewRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerLive(app, { db: options.db, devAuth: options.devAuth === true })
+    registerExportRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerReviewRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerRecordRoutes(app, { db: options.db, devAuth: options.devAuth === true })
     registerBoardRoutes(app, { db: options.db, devAuth: options.devAuth === true })

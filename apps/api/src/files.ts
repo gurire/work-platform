@@ -63,3 +63,24 @@ export const ALLOWED_TYPES = new Set([
   'application/vnd.ms-powerpoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ])
+
+/** Amazon S3, used on AWS. The bucket blocks public access; the API streams files to people. */
+export async function s3FileStore(bucket: string): Promise<FileStore> {
+  const { S3Client, GetObjectCommand, PutObjectCommand } = await import('@aws-sdk/client-s3')
+  const client = new S3Client({})
+  return {
+    async put(key, bytes, contentType) {
+      await client.send(
+        new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: contentType }),
+      )
+    },
+    async get(key) {
+      try {
+        const out = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }))
+        return out.Body ? Buffer.from(await out.Body.transformToByteArray()) : null
+      } catch {
+        return null
+      }
+    },
+  }
+}

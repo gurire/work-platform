@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs'
 import { buildApp } from './app.js'
 import { createPgliteDb, type Db } from './db/db.js'
 import { createPgDb } from './db/pg.js'
-import { diskFileStore } from './files.js'
+import { diskFileStore, s3FileStore } from './files.js'
 import { runDueSchedules } from './runs.js'
 import { migrate } from './db/migrations.js'
 import { seedDevData } from './db/seed.js'
@@ -26,13 +26,19 @@ async function main(): Promise<void> {
       )
     }
     // The local embedded database is for development only.
-    if (!process.env['DATABASE_URL']) {
+    if (!process.env['DATABASE_URL'] && !process.env['DATABASE_HOST']) {
       throw new Error('Production needs DATABASE_URL (the RDS database). Refusing to start.')
     }
   }
   // DATABASE_URL points at a real PostgreSQL (RDS on AWS). Without it, the embedded PGlite
   // database keeps local data in WM_DATA_DIR.
-  const databaseUrl = process.env['DATABASE_URL']
+  // On AWS the database address and its secret arrive as separate settings (infra HostingStack).
+  const dbHost = process.env['DATABASE_HOST']
+  const databaseUrl =
+    process.env['DATABASE_URL'] ??
+    (dbHost
+      ? `postgres://${encodeURIComponent(process.env['DATABASE_USER'] ?? '')}:${encodeURIComponent(process.env['DATABASE_PASSWORD'] ?? '')}@${dbHost}:${process.env['DATABASE_PORT'] ?? '5432'}/${process.env['DATABASE_NAME'] ?? 'workplatform'}`
+      : undefined)
   let db: Db
   if (databaseUrl) {
     db = createPgDb(databaseUrl, { ssl: process.env['DATABASE_SSL'] !== 'off' })
@@ -55,7 +61,9 @@ async function main(): Promise<void> {
     devAuth,
     codeWebhookSecret,
     ...(verifyIdToken ? { verifyIdToken } : {}),
-    files: diskFileStore(process.env['WM_FILES_DIR'] ?? '.data/files'),
+    files: process.env['WM_FILES_BUCKET']
+      ? await s3FileStore(process.env['WM_FILES_BUCKET'])
+      : diskFileStore(process.env['WM_FILES_DIR'] ?? '.data/files'),
   })
   // Recurring runs: check for due schedules every minute.
   const tick = () =>

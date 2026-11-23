@@ -12,3 +12,6 @@ cdk.out/
 .claude/settings.local.json
 .mcp.local.json
 .data/
+test-results/
+playwright-report/
+cdk-outputs.json
